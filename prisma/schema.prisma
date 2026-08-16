@@ -1,0 +1,228 @@
+// ====================================================================
+// RAJINQU - PRISMA SCHEMA DEFINITION (PostgreSQL / Neon DB)
+// ====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  MUSYRIF
+  SANTRI
+}
+
+enum KategoriKegiatan {
+  IBADAH
+  BELAJAR
+  SOSIAL
+  MANDIRI
+}
+
+enum StatusLaporan {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// -------------------------------------------------------------------
+// PONDOK PESANTREN & PERIODE
+// -------------------------------------------------------------------
+
+model Pondok {
+  id          String           @id @default(cuid())
+  nama        String
+  alamat      String?
+  telepon     String?
+  kodePondok  String           @unique
+  logoUrl     String?
+  users       User[]
+  kegiatan    Kegiatan[]
+  periodes    PeriodeLiburan[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("pondok")
+}
+
+model PeriodeLiburan {
+  id               String    @id @default(cuid())
+  nama             String    // Contoh: "Liburan Semester Genap 1447 H"
+  tanggalMulai     DateTime
+  tanggalSelesai   DateTime
+  targetPoinReward Int       @default(500)
+  deskripsiReward  String?
+  isActive         Boolean   @default(true)
+  pondokId         String
+  pondok           Pondok    @relation(fields: [pondokId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("periode_liburan")
+}
+
+// -------------------------------------------------------------------
+// USER (SUPER ADMIN, MUSYRIF, SANTRI)
+// -------------------------------------------------------------------
+// Akun dibuat dan dikelola oleh Super Admin
+
+model User {
+  id           String      @id @default(cuid())
+  username     String      @unique // Bisa berupa NIS atau Username unik
+  noHp         String      @unique // Nomor WA untuk notifikasi
+  password     String      // Password / PIN default dari Admin
+  nama         String
+  role         Role        @default(SANTRI)
+  avatarUrl    String?
+  totalPoin    Int         @default(0)
+  isActive     Boolean     @default(true)
+  
+  // Relasi Pondok
+  pondokId     String?
+  pondok       Pondok?     @relation(fields: [pondokId], references: [id], onDelete: SetNull)
+
+  // Relasi Santri -> Musyrif Binaan
+  musyrifId    String?
+  musyrif      User?       @relation("MusyrifBinaan", fields: [musyrifId], references: [id], onDelete: SetNull)
+  santriBinaan User[]      @relation("MusyrifBinaan")
+
+  // Relasi Data Laporan & Interaksi
+  laporanDikirim   Laporan[]   @relation("LaporanSantri")
+  laporanDiperiksa Laporan[]   @relation("ReviewerPengurus")
+  poinLogs         Poin[]
+  likes            Like[]
+  komentars        Komentar[]
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("users")
+}
+
+// -------------------------------------------------------------------
+// MASTER KEGIATAN
+// -------------------------------------------------------------------
+
+model Kegiatan {
+  id          String           @id @default(cuid())
+  nama        String           // Contoh: "Sholat Subuh Berjamaah"
+  deskripsi   String?
+  kategori    KategoriKegiatan @default(IBADAH)
+  poinDefault Int              @default(10)
+  icon        String?          // Nama Lucide icon, misal: "BookOpen", "Sunrise", "Heart"
+  isWajib     Boolean          @default(true)
+  pondokId    String?
+  pondok      Pondok?          @relation(fields: [pondokId], references: [id], onDelete: Cascade)
+  laporans    Laporan[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("kegiatan")
+}
+
+// -------------------------------------------------------------------
+// LAPORAN KEGIATAN HARIAN SANTRI
+// -------------------------------------------------------------------
+
+model Laporan {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation("LaporanSantri", fields: [userId], references: [id], onDelete: Cascade)
+  kegiatanId      String
+  kegiatan        Kegiatan      @relation(fields: [kegiatanId], references: [id], onDelete: Restrict)
+  
+  // Bukti Upload
+  fotoUrl         String        // URL file dari Google Drive
+  gdriveFileId    String?
+  
+  // Metadata GPS & Geolocation
+  lat             Float?
+  long            Float?
+  alamatLokasi    String?       // Deskripsi lokasi/reverse geocode jika ada
+  catatanSantri   String?
+  
+  // Status Validasi Musyrif
+  status          StatusLaporan @default(PENDING)
+  catatanPengurus String?
+  reviewerId      String?
+  reviewer        User?         @relation("ReviewerPengurus", fields: [reviewerId], references: [id], onDelete: SetNull)
+  approvedAt      DateTime?
+  
+  // Social Feed & Gamification
+  isPublicFeed    Boolean       @default(true)
+  likes           Like[]
+  komentars       Komentar[]
+  poinRecord      Poin?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("laporan")
+}
+
+// -------------------------------------------------------------------
+// LOG POIN / REWARD
+// -------------------------------------------------------------------
+
+model Poin {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  laporanId   String?  @unique
+  laporan     Laporan? @relation(fields: [laporanId], references: [id], onDelete: SetNull)
+  jumlahPoin  Int
+  keterangan  String
+  createdAt   DateTime @default(now())
+
+  @@map("poin")
+}
+
+// -------------------------------------------------------------------
+// SOCIAL FEED (LIKE & KOMENTAR)
+// -------------------------------------------------------------------
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  laporanId String
+  laporan   Laporan  @relation(fields: [laporanId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, laporanId])
+  @@map("likes")
+}
+
+model Komentar {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  laporanId String
+  laporan   Laporan  @relation(fields: [laporanId], references: [id], onDelete: Cascade)
+  isi       String
+  createdAt DateTime @default(now())
+
+  @@map("komentar")
+}
+
+// -------------------------------------------------------------------
+// LOG WHATSAPP NOTIFIKASI
+// -------------------------------------------------------------------
+
+model WhatsAppLog {
+  id          String   @id @default(cuid())
+  targetPhone String
+  pesan       String
+  status      String   // "SUCCESS" | "FAILED"
+  tipe        String   // "NEW_REPORT" | "REPORT_STATUS" | "DAILY_REMINDER"
+  response    String?
+  createdAt   DateTime @default(now())
+
+  @@map("whatsapp_logs")
+}
