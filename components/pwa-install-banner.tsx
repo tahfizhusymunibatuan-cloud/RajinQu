@@ -81,7 +81,7 @@ export function PwaInstallBanner() {
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center border border-amber-300/60 shrink-0 shadow-sm">
                 <img
-                  src="/api/logo?type=green"
+                  src="/logo-pondok.png"
                   alt="Logo PPTQ Al-Usymuni"
                   className="w-full h-full object-contain"
                 />

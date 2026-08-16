@@ -77,7 +77,7 @@ export default function LoginPage() {
             {/* Logo Badge Resmi Pondok */}
             <div className="w-20 h-20 rounded-2xl bg-white/95 p-1.5 shadow-xl shadow-teal-950/50 mb-3 flex items-center justify-center border-2 border-amber-300/60 backdrop-blur-md">
               <img
-                src="/api/logo?type=green"
+                src="/logo-pondok.png"
                 alt="Logo Pondok Pesantren Tahfizh Al-Qur'an Al-Usymuni"
                 className="w-full h-full object-contain"
               />

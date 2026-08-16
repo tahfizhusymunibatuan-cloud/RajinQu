@@ -23,8 +23,8 @@ export const metadata: Metadata = {
     title: 'RajinQu',
   },
   icons: {
-    icon: '/api/logo?type=green',
-    apple: '/api/logo?type=green',
+    icon: '/logo-pondok.png',
+    apple: '/logo-pondok.png',
   },
 };
 

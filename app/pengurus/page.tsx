@@ -314,7 +314,7 @@ export default function PengurusPage() {
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center border border-amber-300/60 shadow-sm shrink-0">
               <img
-                src="/api/logo?type=green"
+                src="/logo-pondok.png"
                 alt="Logo PPTQ Al-Usymuni"
                 className="w-full h-full object-contain"
               />

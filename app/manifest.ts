@@ -12,13 +12,13 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: 'portrait',
     icons: [
       {
-        src: '/api/logo?type=green',
+        src: '/logo-pondok.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'maskable',
       },
       {
-        src: '/api/logo?type=green',
+        src: '/logo-pondok.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
