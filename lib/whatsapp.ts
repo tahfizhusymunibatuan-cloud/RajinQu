@@ -1,27 +1,17 @@
 /**
  * ====================================================================
- * RAJINQU - WHATSAPP API INTEGRATION HELPER (FONNTE / WABLAS)
+ * RAJINQU - MANUAL WHATSAPP CONFIRMATION HELPER & TEMPLATES
  * ====================================================================
+ * Sistem ini memungkinkan Santri dan Musyrif mengirim konfirmasi pesan
+ * secara langsung & manual via WhatsApp Web / WhatsApp App (wa.me)
+ * tanpa ketergantungan pada gateway API pihak ketiga (seperti Fonnte).
  */
-
-interface WhatsAppSendPayload {
-  target: string; // Nomor HP tujuan (format: 08123456789 atau 628123456789)
-  message: string;
-  url?: string;
-  filename?: string;
-}
-
-interface WhatsAppResponse {
-  status: boolean;
-  message: string;
-  data?: any;
-}
 
 /**
  * Format nomor HP Indonesia ke format internasional (628xxx)
  */
 export function formatPhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/[^0-9]/g, '');
+  let cleaned = (phone || '').replace(/[^0-9]/g, '');
   if (cleaned.startsWith('0')) {
     cleaned = '62' + cleaned.substring(1);
   } else if (cleaned.startsWith('+62')) {
@@ -33,169 +23,213 @@ export function formatPhoneNumber(phone: string): string {
 }
 
 /**
- * Kirim pesan WhatsApp melalui Gateway Fonnte
+ * Buat tautan langsung ke WhatsApp Web / Aplikasi WhatsApp (wa.me)
  */
-export async function sendWhatsAppMessage({
-  target,
-  message,
-  url,
-  filename,
-}: WhatsAppSendPayload): Promise<WhatsAppResponse> {
-  const token = process.env.FONNTE_API_TOKEN;
-  const formattedPhone = formatPhoneNumber(target);
+export function getWhatsAppUrl(phone: string, message: string): string {
+  const cleanPhone = formatPhoneNumber(phone);
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+}
 
-  // Jika token belum diset, return simulated response & log ke console
-  if (!token || token === 'YOUR_FONNTE_API_TOKEN_HERE') {
-    console.log('📱 [SIMULASI WA GATEWAY - FONNTE]');
-    console.log(`➡️ Tujuan: ${formattedPhone}`);
-    console.log(`💬 Pesan:\n${message}`);
-    if (url) console.log(`📎 Attachment: ${url}`);
-    
-    return {
-      status: true,
-      message: '[Simulasi] Pesan WhatsApp berhasil disimulasikan (Set FONNTE_API_TOKEN di .env untuk pengiriman asli).',
-      data: { target: formattedPhone, message }
-    };
-  }
-
-  try {
-    const formData = new FormData();
-    formData.append('target', formattedPhone);
-    formData.append('message', message);
-    formData.append('countryCode', '62');
-
-    if (url) {
-      formData.append('url', url);
-      if (filename) formData.append('filename', filename);
-    }
-
-    const response = await fetch('https://api.fonnte.com/send', {
-      method: 'POST',
-      headers: {
-        Authorization: token,
-      },
-      body: formData,
-    });
-
-    const result = await response.json();
-    return {
-      status: result.status === true || result.status === 'true',
-      message: result.reason || (result.status ? 'Pesan terkirim' : 'Gagal kirim pesan'),
-      data: result,
-    };
-  } catch (error: any) {
-    console.error('❌ Error sending WhatsApp message via Fonnte:', error);
-    return {
-      status: false,
-      message: error.message || 'Terjadi kesalahan pada gateway WhatsApp',
-    };
+/**
+ * Buka URL WhatsApp secara langsung di browser (tab baru)
+ */
+export function openWhatsAppDirect(phone: string, message: string) {
+  const url = getWhatsAppUrl(phone, message);
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 }
 
 /**
- * Template 1: Notifikasi Laporan Masuk untuk Musyrif
+ * Salin pesan teks ke clipboard dengan fallback
  */
-export async function notifyMusyrifNewReport({
-  musyrifPhone,
+export async function copyMessageToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand('copy');
+    document.body.removeChild(textArea);
+    return successful;
+  } catch (err) {
+    console.error('Failed to copy to clipboard', err);
+    return false;
+  }
+}
+
+/**
+ * TEMPLATE 1: Konfirmasi Laporan Baru dari Santri ke Musyrif
+ */
+export function formatMusyrifReportMessage({
   musyrifName,
   santriName,
+  asrama,
   kegiatanName,
+  poin,
   waktu,
+  statusWaktu,
+  lokasiName,
+  catatanSantri,
   fotoUrl,
+  pondokNama = "Pondok Tahfizhul Qur'an Ash-Sholihah (PTQA) Batuan",
 }: {
-  musyrifPhone: string;
   musyrifName: string;
   santriName: string;
+  asrama?: string;
   kegiatanName: string;
+  poin: number;
   waktu: string;
+  statusWaktu?: 'TEPAT_WAKTU' | 'TERLAMBAT' | string;
+  lokasiName?: string;
+  catatanSantri?: string;
   fotoUrl?: string;
-}) {
-  const message = `🔔 *Laporan Kegiatan Baru - RajinQu*\n\n` +
-    `Assalamu'alaikum Ustadz/Ustadzah *${musyrifName}*,\n` +
-    `Santri binaan Anda baru saja mengirimkan laporan kegiatan liburan:\n\n` +
-    `👤 *Nama Santri:* ${santriName}\n` +
-    `📖 *Kegiatan:* ${kegiatanName}\n` +
-    `⏰ *Waktu:* ${waktu}\n\n` +
-    `Silakan buka dashboard Musyrif RajinQu untuk memeriksa bukti foto & menyetujui laporan.\n\n` +
-    `_RajinQu Pondok Pesantren - Liburan Berkah & Disiplin_`;
+  pondokNama?: string;
+}): string {
+  const statusWaktuText =
+    statusWaktu === 'TERLAMBAT' ? '⏳ Terlambat' : '✓ Tepat Waktu';
 
-  return sendWhatsAppMessage({
-    target: musyrifPhone,
-    message,
-    url: fotoUrl,
-    filename: `bukti_${santriName.replace(/\s+/g, '_')}.jpg`
-  });
+  let msg = `🔔 *KONFIRMASI LAPORAN SANTRI - RAJINQU*\n\n` +
+    `Assalamu'alaikum Warahmatullahi Wabarakatuh,\n` +
+    `Ustadz *${musyrifName}*,\n\n` +
+    `Saya baru saja menyelesaikan dan mengunggah laporan kegiatan liburan di aplikasi RajinQU:\n\n` +
+    `👤 *Nama Santri:* ${santriName} ${asrama ? `(${asrama})` : ''}\n` +
+    `📖 *Kegiatan:* ${kegiatanName} (+${poin} Poin)\n` +
+    `⏰ *Waktu Kirim:* ${waktu} (${statusWaktuText})\n`;
+
+  if (lokasiName) {
+    msg += `📍 *Lokasi GPS:* ${lokasiName}\n`;
+  }
+
+  if (catatanSantri) {
+    msg += `📝 *Catatan:* "${catatanSantri}"\n`;
+  }
+
+  if (fotoUrl) {
+    msg += `📸 *Bukti Foto Kegiatan:* ${fotoUrl}\n`;
+  }
+
+  msg += `\nMohon perkenan Ustadz untuk meninjau dan memvalidasi laporan ini di dashboard Musyrif RajinQU.\n\n` +
+    `_Jazakumullah Khairan Katsiran_\n` +
+    `*${pondokNama}*`;
+
+  return msg;
 }
 
 /**
- * Template 2: Notifikasi Status Validasi untuk Santri
+ * TEMPLATE 2: Konfirmasi Hasil Validasi Laporan dari Musyrif ke Santri (Disetujui / Ditolak)
  */
-export async function notifySantriReportStatus({
-  santriPhone,
+export function formatSantriReportStatusMessage({
   santriName,
   kegiatanName,
   status,
   poin,
   komentar,
+  musyrifName = 'Musyrif Pembimbing',
 }: {
-  santriPhone: string;
   santriName: string;
   kegiatanName: string;
   status: 'APPROVED' | 'REJECTED';
   poin: number;
   komentar?: string;
-}) {
+  musyrifName?: string;
+}): string {
   const isApproved = status === 'APPROVED';
   const icon = isApproved ? '✅' : '❌';
-  const statusText = isApproved ? 'DISETUJUI' : 'DITOLAK / PERLU PERBAIKAN';
+  const statusText = isApproved ? 'DISETUJUI (MUMTAZ)' : 'PERLU PERBAIKAN / DITOLAK';
 
-  let message = `${icon} *Hasil Validasi Kegiatan - RajinQu*\n\n` +
-    `Assalamu'alaikum *${santriName}*,\n` +
-    `Laporan kegiatan liburanmu telah ditinjau oleh Musyrif:\n\n` +
+  let msg = `${icon} *HASIL VALIDASI KEGIATAN - RAJINQU*\n\n` +
+    `Assalamu'alaikum Warahmatullahi Wabarakatuh,\n` +
+    `Ananda *${santriName}*,\n\n` +
+    `Laporan kegiatan liburanmu telah diperiksa oleh Ustadz *${musyrifName}*:\n\n` +
     `📖 *Kegiatan:* ${kegiatanName}\n` +
     `📌 *Status:* *${statusText}*\n`;
 
   if (isApproved) {
-    message += `⭐ *Poin Didapat:* +${poin} Poin\n`;
+    msg += `⭐ *Poin Didapat:* +${poin} Poin\n`;
   }
 
   if (komentar) {
-    message += `💬 *Catatan Musyrif:* "${komentar}"\n`;
+    msg += `💬 *Catatan Evaluasi / Bimbingan:*\n"${komentar}"\n`;
   }
 
-  message += `\nTetap semangat istiqomah menjalankan rutinitas ibadah dan kebaikan di rumah ya!\n\n` +
-    `_RajinQu Pondok Pesantren_`;
+  if (isApproved) {
+    msg += `\nBarakallahu fiik! Terus pertahankan semangat ibadah dan rutinitas positifmu di rumah ya.\n\n`;
+  } else {
+    msg += `\nSilakan periksa kembali instruksi kegiatan, ambil foto bukti yang jelas, dan kirim ulang laporannya di aplikasi RajinQU.\n\n`;
+  }
 
-  return sendWhatsAppMessage({
-    target: santriPhone,
-    message,
-  });
+  msg += `Wassalamu'alaikum Warahmatullahi Wabarakatuh,\n` +
+    `*${musyrifName}*\n` +
+    `_RajinQU - Monitoring Liburan Berkah_`;
+
+  return msg;
 }
 
 /**
- * Template 3: Reminder Otomatis Pukul 19.00 untuk Santri yang Belum Lapor
+ * TEMPLATE 3: Pesan Teguran Kedisiplinan / Pengingat Santri dari Musyrif
  */
-export async function sendDailyReminderToSantri({
-  santriPhone,
+export function formatSantriTeguranMessage({
   santriName,
-  kegiatanBelumSelesai,
+  asrama,
+  tanggal,
+  missingKegiatan,
+  musyrifName = 'Musyrif Pembimbing',
+  musyrifAsrama = 'Pengurus Halaqoh',
 }: {
-  santriPhone: string;
   santriName: string;
-  kegiatanBelumSelesai: string[];
+  asrama?: string;
+  tanggal: string;
+  missingKegiatan: string[];
+  musyrifName?: string;
+  musyrifAsrama?: string;
+}): string {
+  const missingText =
+    missingKegiatan.length > 0
+      ? missingKegiatan.map((k) => `• ${k}`).join('\n')
+      : '• Evaluasi kelengkapan foto dan kepatuhan waktu.';
+
+  return `⚠️ *TEGURAN KEDISIPLINAN - RAJINQU*\n\n` +
+    `Assalamu'alaikum Warahmatullahi Wabarakatuh.\n\n` +
+    `Yth. Ananda *${santriName}* ${asrama ? `(${asrama})` : ''},\n\n` +
+    `Berdasarkan monitoring kegiatan harian liburan pada tanggal *${tanggal}*, Ananda tercatat *belum menyelesaikan / mengunggah* laporan untuk kegiatan berikut:\n\n` +
+    `${missingText}\n\n` +
+    `Mohon untuk segera melaksanakan kewajiban kegiatan liburan dan mengunggah laporan selfie + validasi GPS ke aplikasi RajinQU sebelum batas waktu pengingat.\n\n` +
+    `Semoga Allah senantiasa memberikan kemudahan, keistiqomahan, dan keberkahan.\n\n` +
+    `Wassalamu'alaikum Warahmatullahi Wabarakatuh.\n\n` +
+    `*${musyrifName}*\n` +
+    `_${musyrifAsrama}_`;
+}
+
+/**
+ * Backward compatibility helpers
+ */
+export async function sendWhatsAppMessage(payload: {
+  target: string;
+  message: string;
 }) {
-  const listKegiatan = kegiatanBelumSelesai.map(k => `• ${k}`).join('\n');
+  return {
+    status: true,
+    message: 'Manual WhatsApp confirmation is active.',
+    data: payload,
+  };
+}
 
-  const message = `⏰ *PENGINGAT LAPORAN HARIAN - RajinQu*\n\n` +
-    `Assalamu'alaikum *${santriName}*,\n` +
-    `Waktu sudah menunjukkan pukul 19.00 WIB. Jangan lupa untuk melengkapi laporan kegiatan liburanmu hari ini sebelum batas waktu pukul 21.00 WIB.\n\n` +
-    `📋 *Kegiatan yang belum dilaporkan hari ini:*\n` +
-    `${listKegiatan}\n\n` +
-    `Yuk segera ambil foto selfie dan kirim laporannya di aplikasi RajinQu agar poinmu tetap unggul di Leaderboard!\n\n` +
-    `_Jazakumullah Khairan Katsiran_`;
+export async function notifyMusyrifNewReport(data: any) {
+  return { status: true, message: 'Ready for manual WhatsApp confirmation' };
+}
 
-  return sendWhatsAppMessage({
-    target: santriPhone,
-    message,
-  });
+export async function notifySantriReportStatus(data: any) {
+  return { status: true, message: 'Ready for manual WhatsApp confirmation' };
+}
+
+export async function sendDailyReminderToSantri(data: any) {
+  return { status: true, message: 'Ready for manual WhatsApp confirmation' };
 }

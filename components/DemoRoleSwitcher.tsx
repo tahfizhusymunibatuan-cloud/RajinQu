@@ -70,10 +70,29 @@ export default function DemoRoleSwitcher() {
                 <UserCheck className="w-4 h-4 text-amber-300" />
                 <div>
                   <div className="font-medium">Musyrif (Ust. Abdullah)</div>
-                  <div className="text-[10px] text-slate-300 opacity-80">Validasi & Pantau Santri</div>
+                  <div className="text-[10px] text-slate-300 opacity-80">Validasi & Pantau Halaqoh</div>
                 </div>
               </div>
               {user?.role === 'MUSYRIF' && <span className="text-[10px] bg-teal-800 px-1.5 py-0.5 rounded">Aktif</span>}
+            </button>
+
+            {/* Pengawas */}
+            <button
+              onClick={() => handleSwitch('user-pengawas', '/pengawas')}
+              className={`w-full flex items-center justify-between p-2 rounded-xl transition ${
+                user?.role === 'PENGAWAS'
+                  ? 'bg-teal-600 text-white font-medium shadow-sm'
+                  : 'hover:bg-slate-800 text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-left">
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
+                <div>
+                  <div className="font-medium">Pengawas (Ust. Usman)</div>
+                  <div className="text-[10px] text-slate-300 opacity-80">Pantau Semua Santri & Feed</div>
+                </div>
+              </div>
+              {user?.role === 'PENGAWAS' && <span className="text-[10px] bg-teal-800 px-1.5 py-0.5 rounded">Aktif</span>}
             </button>
 
             {/* Super Admin */}
@@ -107,7 +126,13 @@ export default function DemoRoleSwitcher() {
         <ArrowRightLeft className="w-3.5 h-3.5 text-amber-300" />
         <span>Ganti Role</span>
         <span className="bg-amber-400 text-teal-950 font-bold px-1.5 py-0.5 rounded-full text-[10px]">
-          {user?.role === 'SUPER_ADMIN' ? 'Admin' : user?.role === 'MUSYRIF' ? 'Musyrif' : 'Santri'}
+          {user?.role === 'SUPER_ADMIN'
+            ? 'Admin'
+            : user?.role === 'PENGAWAS'
+            ? 'Pengawas'
+            : user?.role === 'MUSYRIF'
+            ? 'Musyrif'
+            : 'Santri'}
         </span>
       </button>
     </div>

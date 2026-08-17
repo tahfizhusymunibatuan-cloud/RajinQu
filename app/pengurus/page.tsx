@@ -43,7 +43,8 @@ import {
   Phone,
   Layers,
   GraduationCap,
-  Camera
+  Camera,
+  Copy
 } from 'lucide-react';
 import {
   BarChart,
@@ -58,6 +59,14 @@ import {
 } from 'recharts';
 import { PrayerCountdownWidget } from '@/components/prayer-countdown-widget';
 import { uploadImageToStorage, formatDriveImageUrl } from '@/lib/google-drive';
+import {
+  formatSantriReportStatusMessage,
+  formatSantriTeguranMessage,
+  openWhatsAppDirect,
+  copyMessageToClipboard,
+  formatPhoneNumber,
+  getWhatsAppUrl,
+} from '@/lib/whatsapp';
 
 export default function PengurusPage() {
   const router = useRouter();
@@ -76,12 +85,41 @@ export default function PengurusPage() {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'validasi' | 'santri' | 'feed' | 'statistik' | 'profil'>('validasi');
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [selectedLaporanId, setSelectedLaporanId] = useState<string | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [approveNote, setApproveNote] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isSendingWA, setIsSendingWA] = useState<string | null>(null);
+
+  // State Modal Konfirmasi Persetujuan Laporan + WhatsApp Manual
+  const [approveModal, setApproveModal] = useState<{
+    isOpen: boolean;
+    laporan: any | null;
+    santri: any | null;
+    catatan: string;
+    message: string;
+    copied: boolean;
+  }>({
+    isOpen: false,
+    laporan: null,
+    santri: null,
+    catatan: 'Mumtaz! Laporan diterima dan poin ditambahkan.',
+    message: '',
+    copied: false,
+  });
+
+  // State Modal Penolakan Laporan + WhatsApp Manual
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    laporan: any | null;
+    santri: any | null;
+    alasan: string;
+    message: string;
+    copied: boolean;
+  }>({
+    isOpen: false,
+    laporan: null,
+    santri: null,
+    alasan: 'Foto kurang jelas / belum memenuhi kriteria kegiatan, mohon foto ulang.',
+    message: '',
+    copied: false,
+  });
 
   // Feed States
   const [feedFilter, setFeedFilter] = useState<'ALL' | 'IBADAH' | 'BELAJAR' | 'MANDIRI' | 'SOSIAL'>('ALL');
@@ -112,6 +150,7 @@ export default function PengurusPage() {
     santri: any;
     missingKegiatan: string[];
     customMessage: string;
+    copied: boolean;
   } | null>(null);
 
   const musyrifAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -163,28 +202,125 @@ export default function PengurusPage() {
     return matchCategory && matchSearch;
   });
 
-  const handleApprove = (id: string) => {
-    approveLaporan(id, approveNote || 'Mumtaz! Laporan diterima dan poin ditambahkan.');
-    setApproveNote('');
-    showToast('✅ Laporan berhasil disetujui & Notifikasi WA terkirim ke santri!');
+  const handleOpenApprove = (lap: any) => {
+    const santri =
+      allUsers.find((u) => u.id === lap.userId || u.nama === lap.userNama) ||
+      santriList.find((u) => u.nama === lap.userNama) || {
+        nama: lap.userNama,
+        noHp: '08123456789',
+        asrama: lap.userAsrama,
+      };
+
+    const officialKeg = kegiatanList.find((k) => k.id === lap.kegiatanId);
+    const poinResmi = officialKeg ? officialKeg.poin : (lap.poin || 20);
+
+    const defaultNote = 'Mumtaz! Laporan diterima dan poin telah ditambahkan.';
+    const msg = formatSantriReportStatusMessage({
+      santriName: santri.nama,
+      kegiatanName: lap.kegiatanNama,
+      status: 'APPROVED',
+      poin: poinResmi,
+      komentar: defaultNote,
+      musyrifName: user?.nama || 'Musyrif Pembimbing',
+    });
+
+    setApproveModal({
+      isOpen: true,
+      laporan: { ...lap, poin: poinResmi },
+      santri,
+      catatan: defaultNote,
+      message: msg,
+      copied: false,
+    });
   };
 
-  const handleOpenReject = (id: string) => {
-    setSelectedLaporanId(id);
-    setRejectReason('');
-    setRejectModalOpen(true);
+  const handleUpdateApproveCatatan = (newCatatan: string) => {
+    if (!approveModal.laporan || !approveModal.santri) return;
+    const msg = formatSantriReportStatusMessage({
+      santriName: approveModal.santri.nama,
+      kegiatanName: approveModal.laporan.kegiatanNama,
+      status: 'APPROVED',
+      poin: approveModal.laporan.poin,
+      komentar: newCatatan,
+      musyrifName: user?.nama || 'Musyrif Pembimbing',
+    });
+    setApproveModal((prev) => ({ ...prev, catatan: newCatatan, message: msg }));
   };
 
-  const handleConfirmReject = () => {
-    if (!selectedLaporanId) return;
-    if (!rejectReason) {
-      alert('Harap tuliskan alasan penolakan agar santri dapat memperbaikinya.');
-      return;
+  const handleConfirmApproveWithWA = () => {
+    if (!approveModal.laporan) return;
+    approveLaporan(approveModal.laporan.id, approveModal.catatan);
+    if (approveModal.santri?.noHp) {
+      openWhatsAppDirect(approveModal.santri.noHp, approveModal.message);
     }
-    rejectLaporan(selectedLaporanId, rejectReason);
-    setRejectModalOpen(false);
-    setSelectedLaporanId(null);
-    showToast('❌ Laporan ditolak & Catatan evaluasi dikirim via WhatsApp.');
+    setApproveModal((prev) => ({ ...prev, isOpen: false }));
+    showToast('✅ Laporan disetujui & Membuka WhatsApp santri!');
+  };
+
+  const handleConfirmApproveOnly = () => {
+    if (!approveModal.laporan) return;
+    approveLaporan(approveModal.laporan.id, approveModal.catatan);
+    setApproveModal((prev) => ({ ...prev, isOpen: false }));
+    showToast('✅ Laporan berhasil disetujui!');
+  };
+
+  const handleOpenReject = (lap: any) => {
+    const santri =
+      allUsers.find((u) => u.id === lap.userId || u.nama === lap.userNama) ||
+      santriList.find((u) => u.nama === lap.userNama) || {
+        nama: lap.userNama,
+        noHp: '08123456789',
+        asrama: lap.userAsrama,
+      };
+
+    const defaultReason = 'Foto kurang jelas / belum memenuhi kriteria kegiatan. Mohon upload ulang dengan jelas.';
+    const msg = formatSantriReportStatusMessage({
+      santriName: santri.nama,
+      kegiatanName: lap.kegiatanNama,
+      status: 'REJECTED',
+      poin: 0,
+      komentar: defaultReason,
+      musyrifName: user?.nama || 'Musyrif Pembimbing',
+    });
+
+    setRejectModal({
+      isOpen: true,
+      laporan: lap,
+      santri,
+      alasan: defaultReason,
+      message: msg,
+      copied: false,
+    });
+  };
+
+  const handleUpdateRejectAlasan = (newAlasan: string) => {
+    if (!rejectModal.laporan || !rejectModal.santri) return;
+    const msg = formatSantriReportStatusMessage({
+      santriName: rejectModal.santri.nama,
+      kegiatanName: rejectModal.laporan.kegiatanNama,
+      status: 'REJECTED',
+      poin: 0,
+      komentar: newAlasan,
+      musyrifName: user?.nama || 'Musyrif Pembimbing',
+    });
+    setRejectModal((prev) => ({ ...prev, alasan: newAlasan, message: msg }));
+  };
+
+  const handleConfirmRejectWithWA = () => {
+    if (!rejectModal.laporan) return;
+    rejectLaporan(rejectModal.laporan.id, rejectModal.alasan);
+    if (rejectModal.santri?.noHp) {
+      openWhatsAppDirect(rejectModal.santri.noHp, rejectModal.message);
+    }
+    setRejectModal((prev) => ({ ...prev, isOpen: false }));
+    showToast('❌ Laporan ditolak & Membuka WhatsApp santri!');
+  };
+
+  const handleConfirmRejectOnly = () => {
+    if (!rejectModal.laporan) return;
+    rejectLaporan(rejectModal.laporan.id, rejectModal.alasan);
+    setRejectModal((prev) => ({ ...prev, isOpen: false }));
+    showToast('❌ Laporan ditolak!');
   };
 
   // Komentar Musyrif ke Feed Santri
@@ -245,39 +381,29 @@ export default function PengurusPage() {
 
     const missing = kegiatanList
       .filter((k) => !doneKegiatanIds.includes(k.id))
-      .map((k) => `• ${k.nama} (${k.isWajib ? 'Wajib' : 'Sunnah'})`);
+      .map((k) => `${k.nama} (${k.isWajib ? 'Wajib' : 'Sunnah'})`);
 
-    const missingText = missing.length > 0
-      ? missing.join('\n')
-      : '• Evaluasi kelengkapan foto dan kepatuhan waktu.';
-
-    const messageTemplate = `*TEGURAN KEDISIPLINAN - RAJINQU PTQA BATUAN*\n\nAssalamu'alaikum Warahmatullahi Wabarakatuh.\n\nYth. Ananda *${santri.nama}* (${santri.asrama || 'Santri Binaan'}),\n\nBerdasarkan monitoring kegiatan liburan pada tanggal *${filterDate}*, Ananda tercatat *belum menyelesaikan / mengunggah* laporan untuk kegiatan:\n\n${missingText}\n\nMohon untuk selalu melaksanakan kegiatan liburan dan mengunggah laporan selfie + validasi GPS ke aplikasi RajinQU.\n\nSemoga Allah senantiasa memberikan kemudahan dan keberkahan.\n\nWassalamu'alaikum Warahmatullahi Wabarakatuh.\n\n*${user?.nama || 'Musyrif Pembimbing'}*\n_${user?.asrama || 'Pengurus Halaqoh Pondok'}_`;
+    const messageTemplate = formatSantriTeguranMessage({
+      santriName: santri.nama,
+      asrama: santri.asrama,
+      tanggal: filterDate,
+      missingKegiatan: missing,
+      musyrifName: user?.nama || 'Musyrif Pembimbing',
+      musyrifAsrama: user?.asrama || 'Pengurus Halaqoh',
+    });
 
     setTeguranTarget({
       santri,
       missingKegiatan: missing,
       customMessage: messageTemplate,
+      copied: false,
     });
     setIsTeguranModalOpen(true);
   };
 
-  const handleSendTeguranDirect = async () => {
-    if (!teguranTarget) return;
-    setIsSendingWA(teguranTarget.santri.id);
-    await broadcastReminder(teguranTarget.santri.id);
-    setIsSendingWA(null);
-    setIsTeguranModalOpen(false);
-    showToast(`📱 Pesan teguran WhatsApp berhasil dikirim ke ${teguranTarget.santri.nama}!`);
-  };
-
   const handleOpenWhatsAppWeb = () => {
     if (!teguranTarget) return;
-    let cleanPhone = teguranTarget.santri.noHp.replace(/\D/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '62' + cleanPhone.slice(1);
-    }
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(teguranTarget.customMessage)}`;
-    window.open(url, '_blank');
+    openWhatsAppDirect(teguranTarget.santri.noHp, teguranTarget.customMessage);
     setIsTeguranModalOpen(false);
     showToast(`📱 Membuka WhatsApp untuk ${teguranTarget.santri.nama}...`);
   };
@@ -455,7 +581,7 @@ export default function PengurusPage() {
                     {/* Action Buttons: Setuju / Tolak */}
                     <div className="pt-2 grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => handleOpenReject(lap.id)}
+                        onClick={() => handleOpenReject(lap)}
                         className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200 flex items-center justify-center gap-1.5 transition active:scale-95 text-xs"
                       >
                         <XCircle className="w-4 h-4" />
@@ -463,7 +589,7 @@ export default function PengurusPage() {
                       </button>
 
                       <button
-                        onClick={() => handleApprove(lap.id)}
+                        onClick={() => handleOpenApprove(lap)}
                         className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-1.5 transition active:scale-95 text-xs"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -1146,41 +1272,274 @@ export default function PengurusPage() {
       </nav>
 
       {/* ============================================================= */}
-      {/* MODAL KONFIRMASI TEGURAN WHATSAPP */}
+      {/* MODAL 1: KONFIRMASI PERSETUJUAN LAPORAN (APPROVE + WA) */}
       {/* ============================================================= */}
-      {isTeguranModalOpen && teguranTarget && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs">
-                <MessageCircle className="w-4 h-4 text-emerald-600" />
-                <span>Kirim Teguran WhatsApp ke Santri</span>
+      {approveModal.isOpen && approveModal.laporan && approveModal.santri && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <CheckCircle className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800">Setujui Laporan Kegiatan</h3>
+                  <p className="text-[10px] text-slate-400">+{approveModal.laporan.poin} Poin untuk Santri</p>
+                </div>
               </div>
               <button
-                onClick={() => setIsTeguranModalOpen(false)}
-                className="text-xs text-slate-400 hover:text-slate-600"
+                type="button"
+                onClick={() => setApproveModal((prev) => ({ ...prev, isOpen: false }))}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs transition"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-2 flex-1 overflow-y-auto pr-1 text-xs">
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="space-y-2.5 flex-1 overflow-y-auto pr-1 text-xs">
+              {/* Santri Card */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800">{approveModal.santri.nama}</span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    +{approveModal.laporan.poin} Poin
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  📖 {approveModal.laporan.kegiatanNama} • 📱 {approveModal.santri.noHp}
+                </div>
+              </div>
+
+              {/* Input Catatan Apresiasi / Bimbingan */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Catatan Apresiasi Musyrif (Opsional):
+                </label>
+                <input
+                  type="text"
+                  value={approveModal.catatan}
+                  onChange={(e) => handleUpdateApproveCatatan(e.target.value)}
+                  placeholder="Contoh: Mumtaz! Terus pertahankan hafalannya..."
+                  className="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 shadow-2xs font-medium"
+                />
+              </div>
+
+              {/* Preview Draft Pesan WA */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    Draft Pesan Notifikasi WhatsApp:
+                  </label>
+                  <span className="text-[9px] text-slate-400">Siap dikirim ke Santri</span>
+                </div>
+                <textarea
+                  rows={6}
+                  value={approveModal.message}
+                  onChange={(e) =>
+                    setApproveModal((prev) => ({ ...prev, message: e.target.value }))
+                  }
+                  className="w-full text-[11px] p-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 leading-relaxed shadow-2xs"
+                ></textarea>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={handleConfirmApproveWithWA}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow flex items-center justify-center gap-2 transition"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Setujui & Kirim via WhatsApp Santri</span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyMessageToClipboard(approveModal.message);
+                    if (success) {
+                      setApproveModal((prev) => ({ ...prev, copied: true }));
+                      setTimeout(() => {
+                        setApproveModal((prev) => ({ ...prev, copied: false }));
+                      }, 2500);
+                    }
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{approveModal.copied ? '✓ Tersalin!' : 'Salin Pesan'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmApproveOnly}
+                  className="flex-1 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-xs rounded-xl transition"
+                >
+                  Setujui Saja
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL 2: TOLAK LAPORAN + CATATAN EVALUASI WHATSAPP */}
+      {/* ============================================================= */}
+      {rejectModal.isOpen && rejectModal.laporan && rejectModal.santri && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-rose-800">
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                  <XCircle className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800">Tolak Laporan Santri</h3>
+                  <p className="text-[10px] text-slate-400">Kirim instruksi perbaikan via WhatsApp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectModal((prev) => ({ ...prev, isOpen: false }))}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 flex-1 overflow-y-auto pr-1 text-xs">
+              <div className="p-3 bg-rose-50/70 rounded-2xl border border-rose-200">
+                <div className="font-bold text-slate-800">{rejectModal.santri.nama}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  📖 {rejectModal.laporan.kegiatanNama} • 📱 {rejectModal.santri.noHp}
+                </div>
+              </div>
+
+              {/* Input Alasan Penolakan */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Alasan Penolakan / Catatan Evaluasi:
+                </label>
+                <textarea
+                  rows={2}
+                  value={rejectModal.alasan}
+                  onChange={(e) => handleUpdateRejectAlasan(e.target.value)}
+                  placeholder="Tuliskan alasan penolakan agar santri dapat memperbaikinya..."
+                  className="w-full text-xs p-2.5 bg-slate-50 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500 font-medium"
+                ></textarea>
+              </div>
+
+              {/* Preview Draft Pesan WA */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    Draft Pesan Evaluasi WhatsApp:
+                  </label>
+                  <span className="text-[9px] text-slate-400">Dapat diedit</span>
+                </div>
+                <textarea
+                  rows={6}
+                  value={rejectModal.message}
+                  onChange={(e) =>
+                    setRejectModal((prev) => ({ ...prev, message: e.target.value }))
+                  }
+                  className="w-full text-[11px] p-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-slate-800 focus:ring-2 focus:ring-rose-500 leading-relaxed shadow-2xs"
+                ></textarea>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={handleConfirmRejectWithWA}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow flex items-center justify-center gap-2 transition"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Tolak & Kirim Evaluasi via WhatsApp</span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyMessageToClipboard(rejectModal.message);
+                    if (success) {
+                      setRejectModal((prev) => ({ ...prev, copied: true }));
+                      setTimeout(() => {
+                        setRejectModal((prev) => ({ ...prev, copied: false }));
+                      }, 2500);
+                    }
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{rejectModal.copied ? '✓ Tersalin!' : 'Salin Pesan'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmRejectOnly}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-rose-700 font-bold text-xs rounded-xl transition"
+                >
+                  Tolak Saja
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL 3: KONFIRMASI TEGURAN KEDISIPLINAN WHATSAPP */}
+      {/* ============================================================= */}
+      {isTeguranModalOpen && teguranTarget && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <MessageCircle className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800">Teguran Kedisiplinan</h3>
+                  <p className="text-[10px] text-slate-400">Kirim teguran manual via WhatsApp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTeguranModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 flex-1 overflow-y-auto pr-1 text-xs">
+              <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200">
                 <div className="font-bold text-slate-800">{teguranTarget.santri.nama}</div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  {teguranTarget.santri.noHp} • {teguranTarget.santri.asrama}
+                <div className="text-[10px] text-slate-600 font-mono mt-0.5">
+                  📱 {teguranTarget.santri.noHp} • {teguranTarget.santri.asrama}
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Draft Pesan WhatsApp (Dapat Diedit):
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    Draft Pesan Teguran (Dapat Diedit):
+                  </label>
+                  <span className="text-[9px] text-slate-400">Otomatis rincian tugas</span>
+                </div>
                 <textarea
                   rows={9}
                   value={teguranTarget.customMessage}
-                  onChange={(e) => setTeguranTarget({ ...teguranTarget, customMessage: e.target.value })}
-                  className="w-full text-[11px] p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-emerald-500 leading-relaxed"
+                  onChange={(e) =>
+                    setTeguranTarget({ ...teguranTarget, customMessage: e.target.value })
+                  }
+                  className="w-full text-[11px] p-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-slate-800 focus:ring-2 focus:ring-amber-500 leading-relaxed shadow-2xs"
                 ></textarea>
               </div>
             </div>
@@ -1188,22 +1547,39 @@ export default function PengurusPage() {
             <div className="pt-2 border-t border-slate-100 space-y-2">
               <button
                 type="button"
-                onClick={handleSendTeguranDirect}
-                disabled={isSendingWA === teguranTarget.santri.id}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow flex items-center justify-center gap-1.5 transition active:scale-95"
+                onClick={handleOpenWhatsAppWeb}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow flex items-center justify-center gap-2 transition"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isSendingWA === teguranTarget.santri.id ? 'Mengirim via Gateway...' : 'Kirim via WhatsApp Gateway Pondok'}</span>
+                <ExternalLink className="w-4 h-4" />
+                <span>Buka WhatsApp & Kirim Pesan Teguran</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleOpenWhatsAppWeb}
-                className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Buka Langsung di WhatsApp Web / App</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyMessageToClipboard(teguranTarget.customMessage);
+                    if (success) {
+                      setTeguranTarget((prev) => (prev ? { ...prev, copied: true } : null));
+                      setTimeout(() => {
+                        setTeguranTarget((prev) => (prev ? { ...prev, copied: false } : null));
+                      }, 2500);
+                    }
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{teguranTarget.copied ? '✓ Tersalin!' : 'Salin Pesan'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsTeguranModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition"
+                >
+                  Tutup
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1224,57 +1600,6 @@ export default function PengurusPage() {
             </div>
             <div className="rounded-2xl overflow-hidden aspect-[3/4] bg-slate-900">
               <img src={previewFotoUrl.url} alt="Bukti Foto" className="w-full h-full object-cover" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Tolak Laporan */}
-      {rejectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
-                <XCircle className="w-4 h-4 text-rose-600" />
-                <span>Tolak Laporan Santri</span>
-              </div>
-              <button
-                onClick={() => setRejectModalOpen(false)}
-                className="text-xs text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <p className="text-[11px] text-slate-600">
-                Berikan catatan evaluasi alasan penolakan (misal: foto blur, tidak di lokasi, atau melewati batas waktu). Catatan ini otomatis dikirim ke WhatsApp santri.
-              </p>
-              <textarea
-                rows={3}
-                required
-                placeholder="Contoh: Foto selfie tidak menunjukkan sedang membaca Al-Qur'an, mohon foto ulang dengan jelas."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full p-2 bg-slate-50 border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500"
-              ></textarea>
-            </div>
-
-            <div className="pt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setRejectModalOpen(false)}
-                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReject}
-                className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow"
-              >
-                Kirim Penolakan
-              </button>
             </div>
           </div>
         </div>

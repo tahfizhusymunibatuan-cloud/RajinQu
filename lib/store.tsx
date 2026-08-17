@@ -19,16 +19,18 @@ interface StoreContextType {
   allUsers: MockUser[];
   santriList: MockUser[];
   musyrifList: MockUser[];
+  pengawasList: MockUser[];
   kegiatanList: MockKegiatan[];
   periodeList: MockPeriodeLiburan[];
   activePeriode: MockPeriodeLiburan | undefined;
   addLaporan: (newLaporan: Omit<MockLaporan, 'id' | 'createdAt' | 'likesCount' | 'isLikedByUser' | 'comments' | 'status' | 'statusWaktu' | 'waktuLaporWIB'>) => Promise<MockLaporan>;
-  approveLaporan: (laporanId: string, catatanPengurus?: string, reviewerName?: string) => void;
+  approveLaporan: (laporanId: string, catatanPengurus?: string, customPoin?: number) => void;
   rejectLaporan: (laporanId: string, catatanPengurus: string, reviewerName?: string) => void;
   toggleLike: (laporanId: string, userId: string) => void;
   addComment: (laporanId: string, user: MockUser, text: string) => void;
   broadcastReminder: (santriId: string) => Promise<{ success: boolean; message: string }>;
   addMusyrif: (data: { nama: string; username: string; noHp: string; password: string; asrama: string }) => void;
+  addPengawas: (data: { nama: string; username: string; noHp: string; password: string; asrama?: string }) => void;
   addSantri: (data: { nama: string; username: string; noHp: string; password: string; asrama: string; musyrifId: string }) => void;
   updateSantriMusyrif: (santriId: string, musyrifId: string) => void;
   updateUser: (userId: string, data: Partial<MockUser>) => void;
@@ -92,7 +94,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const savedKegiatan = localStorage.getItem('rajinqu_kegiatan');
     if (savedKegiatan) {
       try {
-        setKegiatanList(JSON.parse(savedKegiatan));
+        const parsed: MockKegiatan[] = JSON.parse(savedKegiatan);
+        const merged = parsed.map((k) => {
+          const defaultK = MOCK_KEGIATAN.find((def) => def.id === k.id);
+          return {
+            ...defaultK,
+            ...k,
+          };
+        });
+        setKegiatanList(merged);
       } catch (e) {
         console.error(e);
       }
@@ -131,7 +141,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const musyrifList = allUsers.filter((u) => u.role === 'MUSYRIF');
+  const pengawasList = allUsers.filter((u) => u.role === 'PENGAWAS');
   const santriList = allUsers.filter((u) => u.role === 'SANTRI');
+
+  const addPengawas = (data: { nama: string; username: string; noHp: string; password: string; asrama?: string }) => {
+    const newPengawas: MockUser = {
+      id: `user-pengawas-${Date.now()}`,
+      username: data.username.trim().toLowerCase(),
+      noHp: data.noHp.trim(),
+      password: data.password.trim(),
+      nama: data.nama.trim(),
+      role: 'PENGAWAS',
+      avatarUrl: `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80`,
+      pondokNama: 'PTQA BATUAN',
+      asrama: data.asrama || 'Koordinator / Pengawas Kesantrian',
+      totalPoin: 0,
+    };
+    saveUsers([...allUsers, newPengawas]);
+  };
 
   const addMusyrif = (data: { nama: string; username: string; noHp: string; password: string; asrama: string }) => {
     const newMusyrif: MockUser = {
@@ -247,8 +274,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const addLaporan = async (data: Omit<MockLaporan, 'id' | 'createdAt' | 'likesCount' | 'isLikedByUser' | 'comments' | 'status' | 'statusWaktu' | 'waktuLaporWIB'>): Promise<MockLaporan> => {
     const waktuStr = getWIBTimeString();
 
-    // Evaluasi apakah kegiatan ini dibatasi waktu dan tepat waktu atau terlambat
+    // Selalu ambil bobot poin resmi dari kegiatan yang diatur oleh Super Admin
     const keg = kegiatanList.find((k) => k.id === data.kegiatanId);
+    const officialPoin = keg ? keg.poin : (data.poin || 20);
+
     const checkResult = checkWaktuKegiatan(
       keg?.isTimeRestricted ?? false,
       keg?.jamMulai,
@@ -257,6 +286,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     const newEntry: MockLaporan = {
       ...data,
+      poin: officialPoin,
       id: `lap-${Date.now()}`,
       status: 'PENDING',
       statusWaktu: checkResult.statusWaktu,
@@ -270,34 +300,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const updatedList = [newEntry, ...laporanList];
     saveLaporan(updatedList);
 
-    // Cari musyrif penanggung jawab santri
-    const santri = allUsers.find((u) => u.id === data.userId || u.nama === data.userNama);
-    const targetMusyrif = allUsers.find((u) => u.id === santri?.musyrifId) || allUsers.find((u) => u.role === 'MUSYRIF');
-
-    await notifyMusyrifNewReport({
-      musyrifPhone: targetMusyrif?.noHp || '081288880002',
-      musyrifName: targetMusyrif?.nama || 'Ustadz Pembimbing',
-      santriName: data.userNama,
-      kegiatanName: data.kegiatanNama,
-      waktu: `${waktuStr} (${checkResult.statusWaktu === 'TEPAT_WAKTU' ? 'Tepat Waktu' : 'Terlambat'})`,
-      fotoUrl: data.fotoUrl,
-    });
-
     return newEntry;
   };
 
-  const approveLaporan = (laporanId: string, catatanPengurus?: string) => {
+  const approveLaporan = (laporanId: string, catatanPengurus?: string, customPoin?: number) => {
     let targetSantriId = '';
+    let targetSantriNama = '';
     let poinGained = 0;
     let kegiatanName = '';
 
-    const updated = laporanList.map((lap) => {
+    const updatedLaporans = laporanList.map((lap) => {
       if (lap.id === laporanId) {
         targetSantriId = lap.userId;
-        poinGained = lap.poin;
+        targetSantriNama = lap.userNama;
+
+        // Ambil poin resmi dari Super Admin (kegiatanList) atau custom poin jika ditentukan musyrif
+        const officialKeg = kegiatanList.find((k) => k.id === lap.kegiatanId);
+        const finalPoin = customPoin !== undefined ? customPoin : (officialKeg ? officialKeg.poin : lap.poin);
+
+        poinGained = finalPoin;
         kegiatanName = lap.kegiatanNama;
+
         return {
           ...lap,
+          poin: finalPoin,
           status: 'APPROVED' as const,
           catatanPengurus: catatanPengurus || 'Mumtaz! Laporan telah disetujui.',
         };
@@ -305,36 +331,64 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return lap;
     });
 
-    saveLaporan(updated);
+    saveLaporan(updatedLaporans);
 
     if (targetSantriId && poinGained > 0) {
-      const updatedUsers = allUsers.map((s) =>
-        s.id === targetSantriId ? { ...s, totalPoin: s.totalPoin + poinGained } : s
+      const updatedUsersRaw = allUsers.map((s) =>
+        s.id === targetSantriId || s.nama === targetSantriNama
+          ? { ...s, totalPoin: s.totalPoin + poinGained }
+          : s
       );
-      saveUsers(updatedUsers);
 
-      const santri = allUsers.find((s) => s.id === targetSantriId);
-      if (santri) {
-        notifySantriReportStatus({
-          santriPhone: santri.noHp,
-          santriName: santri.nama,
-          kegiatanName: kegiatanName,
-          status: 'APPROVED',
-          poin: poinGained,
-          komentar: catatanPengurus,
-        });
+      // Hitung ulang peringkat ranking semua santri berdasarkan totalPoin tertinggi
+      const santriSorted = updatedUsersRaw
+        .filter((u) => u.role === 'SANTRI')
+        .sort((a, b) => b.totalPoin - a.totalPoin);
+
+      const rankedUsers = updatedUsersRaw.map((u) => {
+        if (u.role === 'SANTRI') {
+          const rankIdx = santriSorted.findIndex((s) => s.id === u.id);
+          return {
+            ...u,
+            peringkat: rankIdx !== -1 ? rankIdx + 1 : u.peringkat,
+          };
+        }
+        return u;
+      });
+
+      saveUsers(rankedUsers);
+
+      // Sinkronisasi session aktif di localStorage jika user ini sedang login
+      try {
+        const currentSession = localStorage.getItem('rajinqu_session');
+        if (currentSession) {
+          const parsed = JSON.parse(currentSession);
+          if (parsed.id === targetSantriId || parsed.nama === targetSantriNama) {
+            const updatedSantriObj = rankedUsers.find((u) => u.id === targetSantriId || u.nama === targetSantriNama);
+            if (updatedSantriObj) {
+              localStorage.setItem('rajinqu_session', JSON.stringify({ ...parsed, ...updatedSantriObj }));
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to sync session points', e);
       }
     }
   };
 
   const rejectLaporan = (laporanId: string, catatanPengurus: string) => {
     let targetSantriId = '';
-    let kegiatanName = '';
+    let targetSantriNama = '';
+    let deductedPoin = 0;
+    let wasApproved = false;
 
-    const updated = laporanList.map((lap) => {
+    const updatedLaporans = laporanList.map((lap) => {
       if (lap.id === laporanId) {
         targetSantriId = lap.userId;
-        kegiatanName = lap.kegiatanNama;
+        targetSantriNama = lap.userNama;
+        wasApproved = lap.status === 'APPROVED';
+        deductedPoin = lap.poin;
+
         return {
           ...lap,
           status: 'REJECTED' as const,
@@ -344,19 +398,47 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return lap;
     });
 
-    saveLaporan(updated);
+    saveLaporan(updatedLaporans);
 
-    if (targetSantriId) {
-      const santri = allUsers.find((s) => s.id === targetSantriId);
-      if (santri) {
-        notifySantriReportStatus({
-          santriPhone: santri.noHp,
-          santriName: santri.nama,
-          kegiatanName: kegiatanName,
-          status: 'REJECTED',
-          poin: 0,
-          komentar: catatanPengurus,
-        });
+    // Jika sebelumnya sudah APPROVED dan dibatalkan/ditolak, kurangi poin santri
+    if (wasApproved && targetSantriId && deductedPoin > 0) {
+      const updatedUsersRaw = allUsers.map((s) =>
+        s.id === targetSantriId || s.nama === targetSantriNama
+          ? { ...s, totalPoin: Math.max(0, s.totalPoin - deductedPoin) }
+          : s
+      );
+
+      const santriSorted = updatedUsersRaw
+        .filter((u) => u.role === 'SANTRI')
+        .sort((a, b) => b.totalPoin - a.totalPoin);
+
+      const rankedUsers = updatedUsersRaw.map((u) => {
+        if (u.role === 'SANTRI') {
+          const rankIdx = santriSorted.findIndex((s) => s.id === u.id);
+          return {
+            ...u,
+            peringkat: rankIdx !== -1 ? rankIdx + 1 : u.peringkat,
+          };
+        }
+        return u;
+      });
+
+      saveUsers(rankedUsers);
+
+      // Sinkronisasi session aktif
+      try {
+        const currentSession = localStorage.getItem('rajinqu_session');
+        if (currentSession) {
+          const parsed = JSON.parse(currentSession);
+          if (parsed.id === targetSantriId || parsed.nama === targetSantriNama) {
+            const updatedSantriObj = rankedUsers.find((u) => u.id === targetSantriId || u.nama === targetSantriNama);
+            if (updatedSantriObj) {
+              localStorage.setItem('rajinqu_session', JSON.stringify({ ...parsed, ...updatedSantriObj }));
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to sync session points', e);
       }
     }
   };
@@ -514,6 +596,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         allUsers,
         santriList,
         musyrifList,
+        pengawasList,
         kegiatanList,
         periodeList,
         activePeriode,
@@ -524,6 +607,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         addComment,
         broadcastReminder,
         addMusyrif,
+        addPengawas,
         addSantri,
         updateSantriMusyrif,
         updateUser,

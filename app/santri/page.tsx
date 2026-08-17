@@ -35,7 +35,10 @@ import {
   HeartHandshake,
   GraduationCap,
   Activity,
-  FlipHorizontal
+  FlipHorizontal,
+  Copy,
+  ExternalLink,
+  Check
 } from 'lucide-react';
 import {
   BarChart,
@@ -46,11 +49,18 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts';
-import { MOCK_STATISTIK_MINGGUAN, MOCK_REWARD_PERIODE, MockKegiatan } from '@/lib/mock-data';
+import { MOCK_STATISTIK_MINGGUAN, MOCK_REWARD_PERIODE, MockKegiatan, MockLaporan } from '@/lib/mock-data';
 import { getWIBTimeString, checkWaktuKegiatan } from '@/lib/time-wib';
 import { PrayerCountdownWidget } from '@/components/prayer-countdown-widget';
 import { calculateActivityCountdown } from '@/lib/prayer-times';
 import { uploadImageToStorage, formatDriveImageUrl } from '@/lib/google-drive';
+import {
+  formatMusyrifReportMessage,
+  openWhatsAppDirect,
+  copyMessageToClipboard,
+  formatPhoneNumber,
+  getWhatsAppUrl,
+} from '@/lib/whatsapp';
 
 export default function SantriPage() {
   const router = useRouter();
@@ -83,6 +93,25 @@ export default function SantriPage() {
   const [isCapturingGps, setIsCapturingGps] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadSuccessAlert, setUploadSuccessAlert] = useState(false);
+
+  // State Modal Konfirmasi WhatsApp Manual ke Musyrif
+  const [waConfirmModal, setWaConfirmModal] = useState<{
+    isOpen: boolean;
+    laporan: MockLaporan | null;
+    musyrifNama: string;
+    musyrifPhone: string;
+    musyrifAsrama: string;
+    message: string;
+    copied: boolean;
+  }>({
+    isOpen: false,
+    laporan: null,
+    musyrifNama: '',
+    musyrifPhone: '',
+    musyrifAsrama: '',
+    message: '',
+    copied: false,
+  });
 
   // Riwayat Filter
   const [riwayatFilter, setRiwayatFilter] = useState<'ALL' | 'APPROVED' | 'PENDING' | 'REJECTED'>('ALL');
@@ -365,6 +394,39 @@ export default function SantriPage() {
     }
   };
 
+  const handleOpenWAConfirmation = (lap: MockLaporan) => {
+    const assignedMusyrif =
+      allUsers.find((u) => u.id === currentSantriUser?.musyrifId || u.nama === currentSantriUser?.musyrifNama) ||
+      allUsers.find((u) => u.role === 'MUSYRIF');
+
+    const musyrifNama = assignedMusyrif?.nama || currentSantriUser?.musyrifNama || 'Ustadz Pembimbing';
+    const musyrifPhone = assignedMusyrif?.noHp || '081288880002';
+    const musyrifAsrama = assignedMusyrif?.asrama || 'Halaqoh Pondok';
+
+    const msg = formatMusyrifReportMessage({
+      musyrifName: musyrifNama,
+      santriName: lap.userNama || currentSantriUser?.nama || 'Santri',
+      asrama: lap.userAsrama || currentSantriUser?.asrama,
+      kegiatanName: lap.kegiatanNama,
+      poin: lap.poin,
+      waktu: lap.waktuLaporWIB || lap.createdAt,
+      statusWaktu: lap.statusWaktu,
+      lokasiName: lap.lokasiName,
+      catatanSantri: lap.catatanSantri,
+      fotoUrl: formatDriveImageUrl(lap.fotoUrl),
+    });
+
+    setWaConfirmModal({
+      isOpen: true,
+      laporan: lap,
+      musyrifNama,
+      musyrifPhone,
+      musyrifAsrama,
+      message: msg,
+      copied: false,
+    });
+  };
+
   const handleSubmitLaporan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedKegiatan) return;
@@ -385,7 +447,7 @@ export default function SantriPage() {
 
       const finalFotoUrl = uploadRes.fileUrl || photoPreview;
 
-      await addLaporan({
+      const newEntry = await addLaporan({
         userId: currentSantriUser?.id || 'user-santri-1',
         userNama: currentSantriUser?.nama || 'Muhammad Faiz Ar-Rasyid',
         userAvatar: currentSantriUser?.avatarUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
@@ -405,6 +467,35 @@ export default function SantriPage() {
       setUploadSuccessAlert(true);
       setTimeout(() => setUploadSuccessAlert(false), 4000);
       setActiveTab('riwayat');
+
+      // Cari Musyrif Pembina dan susun pesan konfirmasi
+      const assignedMusyrif =
+        allUsers.find((u) => u.id === currentSantriUser?.musyrifId || u.nama === currentSantriUser?.musyrifNama) ||
+        allUsers.find((u) => u.role === 'MUSYRIF');
+
+      const musyrifNama = assignedMusyrif?.nama || currentSantriUser?.musyrifNama || 'Ustadz Pembimbing';
+      const musyrifPhone = assignedMusyrif?.noHp || '081288880002';
+      const musyrifAsrama = assignedMusyrif?.asrama || 'Halaqoh Pondok';
+
+      const msg = formatMusyrifReportMessage({
+        musyrifName: musyrifNama,
+        santriName: newEntry.userNama || currentSantriUser?.nama || 'Santri',
+        asrama: newEntry.userAsrama || currentSantriUser?.asrama,
+        kegiatanName: newEntry.kegiatanNama,
+        poin: newEntry.poin,
+        waktu: newEntry.waktuLaporWIB || newEntry.createdAt,
+        statusWaktu: newEntry.statusWaktu,
+        lokasiName: newEntry.lokasiName,
+        catatanSantri: newEntry.catatanSantri,
+        fotoUrl: formatDriveImageUrl(newEntry.fotoUrl),
+      });
+
+      const waUrl = getWhatsAppUrl(musyrifPhone, msg);
+
+      // Langsung navigasi ke WhatsApp Pembina tanpa memunculkan modal di layar
+      if (typeof window !== 'undefined') {
+        window.location.href = waUrl;
+      }
     } catch (err) {
       console.error(err);
       alert('Gagal mengirim laporan.');
@@ -442,7 +533,22 @@ export default function SantriPage() {
     return lap.status === riwayatFilter;
   });
 
-  // Filter Feed: hanya laporan yang sudah disetujui (APPROVED) oleh pembimbing/musyrif
+  // Laporan yang sudah disetujui (APPROVED) milik santri ini
+  const approvedMine = laporanList.filter(
+    (lap) => (lap.userId === user?.id || lap.userNama === user?.nama) && lap.status === 'APPROVED'
+  );
+
+  // Rincian Poin per Kategori (Ibadah, Belajar, Mandiri, Sosial)
+  const ibadahPoin = approvedMine.filter((l) => l.kategori === 'IBADAH').reduce((acc, l) => acc + (l.poin || 0), 0);
+  const belajarPoin = approvedMine.filter((l) => l.kategori === 'BELAJAR').reduce((acc, l) => acc + (l.poin || 0), 0);
+  const mandiriPoin = approvedMine.filter((l) => l.kategori === 'MANDIRI').reduce((acc, l) => acc + (l.poin || 0), 0);
+  const sosialPoin = approvedMine.filter((l) => l.kategori === 'SOSIAL').reduce((acc, l) => acc + (l.poin || 0), 0);
+
+  const santriTotalPoin = currentSantriUser?.totalPoin || 0;
+  const targetPoinPeriode = activePeriode?.targetPoin || 400;
+  const rewardPercent = Math.min(100, Math.round((santriTotalPoin / targetPoinPeriode) * 100));
+
+  // Filter Feed: seluruh laporan santri yang sudah disetujui (APPROVED) oleh pembimbing
   const approvedFeedList = laporanList.filter((lap) => lap.status === 'APPROVED');
 
   // Urutkan leaderboard
@@ -474,10 +580,10 @@ export default function SantriPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Poin Badge */}
-            <div className="flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-2.5 py-1 rounded-full text-xs font-bold">
+            {/* Poin Badge Live */}
+            <div className="flex items-center gap-1.5 bg-amber-400/20 border border-amber-400/40 text-amber-300 px-3 py-1 rounded-full text-xs font-bold shadow-2xs">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>{user?.totalPoin || 245} Poin</span>
+              <span>{currentSantriUser?.totalPoin || 0} Poin</span>
             </div>
 
             {/* Logout button */}
@@ -1039,6 +1145,21 @@ export default function SantriPage() {
                       <span>{lap.catatanPengurus}</span>
                     </div>
                   )}
+
+                  {/* Action Konfirmasi WhatsApp Manual ke Musyrif */}
+                  <div className="pt-1 flex items-center justify-between border-t border-slate-100">
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {lap.waktuLaporWIB || lap.createdAt}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenWAConfirmation(lap)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition active:scale-95 shadow-2xs"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{lap.status === 'PENDING' ? 'Konfirmasi WA ke Musyrif' : 'Kirim Ulang WA'}</span>
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -1100,9 +1221,11 @@ export default function SantriPage() {
                 <div className="text-[11px] font-semibold text-slate-500">Total Poin Terkumpul</div>
                 <div className="text-xl font-extrabold text-teal-700 mt-1 flex items-center gap-1.5">
                   <Sparkles className="w-5 h-5 text-amber-500" />
-                  <span>{currentSantriUser?.totalPoin || 245}</span>
+                  <span>{santriTotalPoin} Poin</span>
                 </div>
-                <div className="text-[10px] text-emerald-600 mt-0.5">Target Periode: 400 Poin</div>
+                <div className="text-[10px] text-emerald-600 mt-0.5">
+                  {rewardPercent}% dari target {targetPoinPeriode} Poin
+                </div>
               </div>
 
               <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
@@ -1115,37 +1238,58 @@ export default function SantriPage() {
               </div>
             </div>
 
-            {/* Progress Harian */}
+            {/* Target Reward Progress Bar */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-slate-800">Status Kedisiplinan Hari Ini</span>
-                <span className="font-bold text-teal-700">4 dari 5 Selesai (80%)</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  Target Reward Periode Ini
+                </span>
+                <span className="font-bold text-teal-700">{santriTotalPoin} / {targetPoinPeriode} Poin ({rewardPercent}%)</span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div className="bg-gradient-to-r from-teal-500 to-emerald-600 h-2.5 rounded-full w-[80%]"></div>
+              <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
+                <div
+                  className="bg-gradient-to-r from-teal-500 to-emerald-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${rewardPercent}%` }}
+                ></div>
               </div>
             </div>
 
-            {/* Grafik Batang Recharts: Kegiatan Per Hari */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold text-slate-800">Grafik Kegiatan & Poin Mingguan</h4>
-                <span className="text-[10px] text-slate-400">Minggu Ini</span>
+            {/* Rincian Poin per Kategori (4 Pilar) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+              <div className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                <span>Rincian Poin per Pilar Ibadah & Kegiatan</span>
+                <span className="text-[10px] text-slate-400 font-normal">{approvedMine.length} Laporan Valid</span>
               </div>
 
-              <div className="h-44 w-full pt-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={MOCK_STATISTIK_MINGGUAN} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="hari" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#0f172a', borderRadius: '8px', color: '#fff', fontSize: '11px' }}
-                      formatter={(val: any, name: string) => [val, name === 'poin' ? 'Poin Didapat' : 'Kegiatan Selesai']}
-                    />
-                    <Bar dataKey="poin" fill="#0d9488" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-teal-50/70 border border-teal-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-teal-950 text-[11px]">
+                    <span>🕌 Ibadah</span>
+                  </div>
+                  <span className="font-extrabold text-teal-800 text-xs">+{ibadahPoin}</span>
+                </div>
+
+                <div className="p-2.5 bg-sky-50/70 border border-sky-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-sky-950 text-[11px]">
+                    <span>📖 Belajar</span>
+                  </div>
+                  <span className="font-extrabold text-sky-800 text-xs">+{belajarPoin}</span>
+                </div>
+
+                <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950 text-[11px]">
+                    <span>🏡 Mandiri</span>
+                  </div>
+                  <span className="font-extrabold text-amber-800 text-xs">+{mandiriPoin}</span>
+                </div>
+
+                <div className="p-2.5 bg-rose-50/70 border border-rose-200 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-rose-950 text-[11px]">
+                    <span>🤝 Sosial</span>
+                  </div>
+                  <span className="font-extrabold text-rose-800 text-xs">+{sosialPoin}</span>
+                </div>
               </div>
             </div>
 
@@ -1157,7 +1301,7 @@ export default function SantriPage() {
                   <span>Target & Reward: {activePeriode?.nama}</span>
                 </div>
                 <span className="text-[10px] font-black bg-amber-200 text-amber-950 px-2 py-0.5 rounded">
-                  Target: {activePeriode?.targetPoin || 400} Poin
+                  Target: {targetPoinPeriode} Poin
                 </span>
               </div>
               <p className="text-[11px] leading-relaxed text-amber-800 pt-0.5">
@@ -1495,19 +1639,138 @@ export default function SantriPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3 bg-gradient-to-r from-teal-600 to-emerald-700 hover:from-teal-700 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs rounded-2xl shadow-md flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transition-all"
                 >
                   {isSubmitting ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   ) : (
                     <>
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Kirim Laporan Sekarang</span>
+                      <MessageCircle className="w-4 h-4 text-emerald-200" />
+                      <span>Kirim Laporan & Buka WhatsApp Pembina</span>
                     </>
                   )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL KONFIRMASI WHATSAPP MANUAL KE MUSYRIF */}
+      {/* ============================================================= */}
+      {waConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3.5 animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <MessageCircle className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800">Konfirmasi WhatsApp</h3>
+                  <p className="text-[10px] text-slate-400">Kirim laporan ke Musyrif Pembimbing</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWaConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 flex-1 overflow-y-auto pr-1 text-xs">
+              {/* Alert Info */}
+              <div className="p-2.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-emerald-950 text-[11px] leading-relaxed flex items-start gap-2">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Alhamdulillah! Laporan tersimpan di sistem.</strong>
+                  <p className="text-[10px] text-emerald-800 mt-0.5">
+                    Silakan klik tombol di bawah untuk membuka WhatsApp & mengirimkan pesan konfirmasi langsung ke Ustadz Pembimbing.
+                  </p>
+                </div>
+              </div>
+
+              {/* Target Musyrif Card */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Tujuan Pengiriman (Musyrif):
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">{waConfirmModal.musyrifNama}</div>
+                    <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                      📱 {waConfirmModal.musyrifPhone}
+                    </div>
+                  </div>
+                  <span className="text-[9px] bg-teal-50 text-teal-800 border border-teal-200 px-2 py-0.5 rounded-full font-bold">
+                    {waConfirmModal.musyrifAsrama}
+                  </span>
+                </div>
+              </div>
+
+              {/* Preview & Edit Draft Pesan WA */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-700">
+                    Draft Pesan WhatsApp:
+                  </label>
+                  <span className="text-[9px] text-slate-400">Otomatis diformat</span>
+                </div>
+                <textarea
+                  rows={8}
+                  value={waConfirmModal.message}
+                  onChange={(e) =>
+                    setWaConfirmModal((prev) => ({ ...prev, message: e.target.value }))
+                  }
+                  className="w-full text-[11px] p-2.5 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-slate-800 focus:ring-2 focus:ring-emerald-500 leading-relaxed shadow-2xs"
+                ></textarea>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  openWhatsAppDirect(waConfirmModal.musyrifPhone, waConfirmModal.message);
+                }}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-2xl shadow-md flex items-center justify-center gap-2 transition"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Buka WhatsApp & Kirim Pesan</span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyMessageToClipboard(waConfirmModal.message);
+                    if (success) {
+                      setWaConfirmModal((prev) => ({ ...prev, copied: true }));
+                      setTimeout(() => {
+                        setWaConfirmModal((prev) => ({ ...prev, copied: false }));
+                      }, 2500);
+                    }
+                  }}
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{waConfirmModal.copied ? '✓ Tersalin!' : 'Salin Pesan'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWaConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition"
+                >
+                  Selesai
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     icon: '/logo-pondok.png',
     apple: '/logo-pondok.png',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export default function RootLayout({

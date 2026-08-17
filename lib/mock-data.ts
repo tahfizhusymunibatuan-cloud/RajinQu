@@ -10,7 +10,7 @@ export interface MockUser {
   noHp: string;
   password: string; // PIN / Password dibuatkan admin (misal: "123456")
   nama: string;
-  role: 'SUPER_ADMIN' | 'MUSYRIF' | 'SANTRI';
+  role: 'SUPER_ADMIN' | 'PENGAWAS' | 'MUSYRIF' | 'SANTRI';
   avatarUrl: string;
   pondokNama: string;
   musyrifId?: string;
@@ -77,6 +77,18 @@ export const MOCK_USERS: MockUser[] = [
     role: 'SUPER_ADMIN',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     pondokNama: 'PTQA BATUAN',
+    totalPoin: 0,
+  },
+  {
+    id: 'user-pengawas',
+    username: 'pengawas.usman',
+    noHp: '081288880009',
+    password: '123',
+    nama: 'Ustadz Dr. H. Usman Ridwan, M.Pd.',
+    role: 'PENGAWAS',
+    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
+    pondokNama: 'PTQA BATUAN',
+    asrama: 'Koordinator / Pengawas Utama Kesantrian',
     totalPoin: 0,
   },
   {
@@ -368,7 +380,7 @@ export const MOCK_LAPORAN: MockLaporan[] = [
     kegiatanNama: 'Sholat Dhuha & Dzikir Pagi',
     kategori: 'IBADAH',
     poin: 10,
-    fotoUrl: 'https://images.unsplash.com/photo-1590076215667-875d4ef2d7ee?w=600&auto=format&fit=crop&q=80',
+    fotoUrl: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=600&auto=format&fit=crop&q=80',
     lat: -6.3015,
     long: 106.8186,
     lokasiName: 'Musholla Al-Amin, Pasar Minggu',

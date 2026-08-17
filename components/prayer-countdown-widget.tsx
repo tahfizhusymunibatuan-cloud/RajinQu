@@ -19,6 +19,7 @@ import {
   DEFAULT_PRAYER_SCHEDULE,
   getNextPrayerInfo,
   calculateActivityCountdown,
+  getNextOrCurrentRestrictedKegiatan,
   getCurrentWIBDate,
   PrayerTimeItem,
 } from '@/lib/prayer-times';
@@ -56,17 +57,13 @@ export function PrayerCountdownWidget({
 
   const restrictedKegiatans = kegiatanList.filter((k) => k.isTimeRestricted && k.jamMulai && k.jamSelesai);
 
-  useEffect(() => {
-    if (restrictedKegiatans.length > 0 && !selectedActivityId) {
-      const activeOne = restrictedKegiatans.find((k) => {
-        const info = calculateActivityCountdown(k.jamMulai, k.jamSelesai);
-        return info.status === 'SEDANG_DIBUKA' || info.status === 'SEGERA_BERAKHIR';
-      });
-      setSelectedActivityId(activeOne ? activeOne.id : restrictedKegiatans[0].id);
-    }
-  }, [restrictedKegiatans, selectedActivityId]);
+  // Secara cerdas pilih kegiatan yang sedang buka sekarang atau yang akan buka berikutnya
+  const relevantKegiatan = getNextOrCurrentRestrictedKegiatan(restrictedKegiatans) || restrictedKegiatans[0];
 
-  const activeKegiatan = restrictedKegiatans.find((k) => k.id === selectedActivityId) || restrictedKegiatans[0];
+  const activeKegiatan = selectedActivityId
+    ? restrictedKegiatans.find((k) => k.id === selectedActivityId) || relevantKegiatan
+    : relevantKegiatan;
+
   const activityCountdown = activeKegiatan
     ? calculateActivityCountdown(activeKegiatan.jamMulai, activeKegiatan.jamSelesai)
     : null;
@@ -127,7 +124,7 @@ export function PrayerCountdownWidget({
             </span>
           </div>
           <span className="font-mono text-[11px] font-extrabold text-teal-900 bg-white px-2 py-0.5 rounded-md border border-teal-200 shadow-2xs">
-            -{nextPrayerData.countdownStr}
+            {nextPrayerData.countdownStr}
           </span>
         </div>
       )}
@@ -155,42 +152,37 @@ export function PrayerCountdownWidget({
       </div>
 
       {/* Activity Countdown Strip */}
-      {restrictedKegiatans.length > 0 && activeKegiatan && activityCountdown && (
+      {restrictedKegiatans.length > 0 && activeKegiatan && (
         <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50/80 p-2.5 rounded-xl">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 truncate">
-              <span>{activeKegiatan.nama}</span>
+              {activityCountdown?.status === 'SEDANG_DIBUKA' || activityCountdown?.status === 'SEGERA_BERAKHIR' ? (
+                <span className="text-emerald-800">⚡ Kegiatan Terbuka: {activeKegiatan.nama}</span>
+              ) : (
+                <span className="text-slate-800">🌅 Kegiatan Terjadwal Besok: {activeKegiatan.nama}</span>
+              )}
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-              <span>⏰ {activeKegiatan.jamMulai} - {activeKegiatan.jamSelesai} WIB</span>
-              {activityCountdown.status === 'SEDANG_DIBUKA' && (
+            <div className="flex items-center flex-wrap gap-1.5 text-[10px] text-slate-500 mt-0.5">
+              <span className="font-medium text-slate-600">
+                Jadwal: {activeKegiatan.jamMulai} - {activeKegiatan.jamSelesai} WIB
+              </span>
+              {activityCountdown?.status === 'SEDANG_DIBUKA' && (
                 <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                  Buka
+                  🟢 Buka Sekarang
                 </span>
               )}
-              {activityCountdown.status === 'SEGERA_BERAKHIR' && (
+              {activityCountdown?.status === 'SEGERA_BERAKHIR' && (
                 <span className="text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 animate-pulse">
-                  Segera Berakhir
+                  ⏳ Segera Berakhir
                 </span>
               )}
-              {activityCountdown.status === 'BERAKHIR' && (
-                <span className="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
-                  Lewat Batas
+              {(activityCountdown?.status === 'BELUM_DIBUKA' || activityCountdown?.status === 'BERAKHIR') && (
+                <span className="text-teal-800 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                  🔵 Buka Besok {activeKegiatan.jamMulai} WIB
                 </span>
               )}
             </div>
           </div>
-
-          {onOpenUpload && (
-            <button
-              type="button"
-              onClick={() => onOpenUpload(activeKegiatan)}
-              className="inline-flex items-center gap-1 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition active:scale-95 shrink-0"
-            >
-              <Camera className="w-3.5 h-3.5" />
-              <span>Setor</span>
-            </button>
-          )}
         </div>
       )}
     </div>

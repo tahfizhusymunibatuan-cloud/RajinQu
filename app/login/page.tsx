@@ -44,6 +44,8 @@ export default function LoginPage() {
           router.push('/santri');
         } else if (res.user.role === 'MUSYRIF') {
           router.push('/pengurus');
+        } else if (res.user.role === 'PENGAWAS') {
+          router.push('/pengawas');
         } else {
           router.push('/admin');
         }
@@ -185,7 +187,7 @@ export default function LoginPage() {
             <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider text-center">
               ⚡ Quick Fill Akun Demo (Klik untuk Isi):
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickDemo('2026001', '123')}
@@ -208,6 +210,18 @@ export default function LoginPage() {
                   <span className="truncate">Musyrif</span>
                 </div>
                 <div className="text-[10px] text-amber-700 mt-0.5">Ust. Abdullah</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemo('pengawas.usman', '123')}
+                className="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200/60 text-left transition group"
+              >
+                <div className="flex items-center gap-1 text-sky-900 font-semibold text-xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                  <span className="truncate">Pengawas</span>
+                </div>
+                <div className="text-[10px] text-sky-700 mt-0.5">Ust. Dr. Usman</div>
               </button>
 
               <button

@@ -125,7 +125,7 @@ export function calculateActivityCountdown(
   const endTotalSeconds = (selesaiH * 60 + selesaiM) * 60;
 
   if (nowTotalSeconds < startTotalSeconds) {
-    // Belum dibuka
+    // Belum dibuka hari ini
     const diff = startTotalSeconds - nowTotalSeconds;
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
@@ -134,7 +134,7 @@ export function calculateActivityCountdown(
     return {
       status: 'BELUM_DIBUKA',
       remainingSeconds: diff,
-      remainingText: `Dibuka dalam ${h > 0 ? `${h}j ` : ''}${m}m ${s}d`,
+      remainingText: `Dibuka dalam ${h > 0 ? `${h}j ` : ''}${m}m ${s}d (Pukul ${jamMulai} WIB)`,
       progressPercent: 0,
     };
   }
@@ -160,14 +160,62 @@ export function calculateActivityCountdown(
     };
   }
 
-  // Melewati batas waktu
-  const diffAfter = nowTotalSeconds - endTotalSeconds;
-  const m = Math.floor(diffAfter / 60);
+  // Melewati jam batas hari ini: hitung waktu hingga dibuka besok
+  const diffTomorrow = 24 * 3600 + startTotalSeconds - nowTotalSeconds;
+  const h = Math.floor(diffTomorrow / 3600);
+  const m = Math.floor((diffTomorrow % 3600) / 60);
 
   return {
     status: 'BERAKHIR',
-    remainingSeconds: 0,
-    remainingText: `Batas lapor telah lewat (${m}m lalu). Status: Terlambat.`,
+    remainingSeconds: diffTomorrow,
+    remainingText: `Selesai hari ini • Dibuka besok pukul ${jamMulai} WIB (dalam ${h}j ${m}m)`,
     progressPercent: 100,
   };
+}
+
+/**
+ * Mencari kegiatan terjadwal yang sedang dibuka sekarang atau yang akan dibuka berikutnya
+ */
+export function getNextOrCurrentRestrictedKegiatan(kegiatanList: any[]) {
+  const restricted = (kegiatanList || []).filter((k) => k.isTimeRestricted && k.jamMulai && k.jamSelesai);
+  if (restricted.length === 0) return null;
+
+  const wib = getCurrentWIBDate();
+  const nowTotalSeconds = (wib.getHours() * 60 + wib.getMinutes()) * 60 + wib.getSeconds();
+
+  // 1. Cari kegiatan yang SEDANG DIBUKA saat ini
+  const currentlyOpen = restricted.find((k) => {
+    const [sh, sm] = k.jamMulai.split(':').map(Number);
+    const [eh, em] = k.jamSelesai.split(':').map(Number);
+    const startSec = (sh * 60 + sm) * 60;
+    const endSec = (eh * 60 + em) * 60;
+    return nowTotalSeconds >= startSec && nowTotalSeconds <= endSec;
+  });
+
+  if (currentlyOpen) return currentlyOpen;
+
+  // 2. Cari kegiatan yang akan dibuka nanti pada hari ini
+  const upcomingToday = restricted
+    .filter((k) => {
+      const [sh, sm] = k.jamMulai.split(':').map(Number);
+      const startSec = (sh * 60 + sm) * 60;
+      return nowTotalSeconds < startSec;
+    })
+    .sort((a, b) => {
+      const [ah, am] = a.jamMulai.split(':').map(Number);
+      const [bh, bm] = b.jamMulai.split(':').map(Number);
+      return ah * 60 + am - (bh * 60 + bm);
+    });
+
+  if (upcomingToday.length > 0) return upcomingToday[0];
+
+  // 3. Jika semua kegiatan hari ini sudah lewat (misal malam hari),
+  // ambil kegiatan pertama yang akan buka besok pagi (Subuh)
+  const sortedByMorning = [...restricted].sort((a, b) => {
+    const [ah, am] = a.jamMulai.split(':').map(Number);
+    const [bh, bm] = b.jamMulai.split(':').map(Number);
+    return ah * 60 + am - (bh * 60 + bm);
+  });
+
+  return sortedByMorning[0];
 }

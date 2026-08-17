@@ -29,6 +29,7 @@ import {
   ChevronRight,
   AlertCircle,
   Clock,
+  Search,
 } from 'lucide-react';
 import { MOCK_REWARD_PERIODE, MockKegiatan } from '@/lib/mock-data';
 
@@ -37,10 +38,13 @@ export default function AdminPage() {
   const { user, logout } = useAuth();
   const {
     kegiatanList,
+    allUsers,
     santriList,
     musyrifList,
+    pengawasList,
     laporanList,
     addMusyrif,
+    addPengawas,
     addSantri,
     updateSantriMusyrif,
     updateUser,
@@ -58,6 +62,8 @@ export default function AdminPage() {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'kegiatan' | 'musyrif' | 'santri' | 'periode'>('santri');
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'SANTRI' | 'MUSYRIF' | 'PENGAWAS' | 'SUPER_ADMIN'>('ALL');
+  const [userSearchQuery, setUserSearchQuery] = useState<string>('');
   const [editableKegiatan, setEditableKegiatan] = useState<MockKegiatan[]>(kegiatanList);
   const [targetPoinReward, setTargetPoinReward] = useState(MOCK_REWARD_PERIODE.targetPoin);
   const [savedSuccess, setSavedSuccess] = useState<string | null>(null);
@@ -70,6 +76,16 @@ export default function AdminPage() {
     noHp: '',
     password: '123',
     asrama: 'Musyrif Halaqoh Abu Bakar',
+  });
+
+  // Modal Tambah Pengawas
+  const [isAddPengawasOpen, setIsAddPengawasOpen] = useState(false);
+  const [pengawasForm, setPengawasForm] = useState({
+    nama: '',
+    username: '',
+    noHp: '',
+    password: '123',
+    asrama: 'Koordinator / Pengawas Utama Kesantrian',
   });
 
   // Modal Tambah Santri
@@ -147,6 +163,17 @@ export default function AdminPage() {
     asrama: '',
   });
 
+  // Modal Edit Pengawas
+  const [isEditPengawasOpen, setIsEditPengawasOpen] = useState(false);
+  const [editPengawasForm, setEditPengawasForm] = useState({
+    id: '',
+    nama: '',
+    username: '',
+    noHp: '',
+    password: '',
+    asrama: '',
+  });
+
   useEffect(() => {
     if (!user) {
       router.push('/login');
@@ -184,6 +211,24 @@ export default function AdminPage() {
       asrama: 'Musyrif Asrama Abu Bakar',
     });
     showNotification('✅ Akun Musyrif baru berhasil dibuat & siap bertugas!');
+  };
+
+  const handleCreatePengawas = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pengawasForm.nama || !pengawasForm.username || !pengawasForm.noHp) {
+      alert('Harap isi semua kolom data pengawas.');
+      return;
+    }
+    addPengawas(pengawasForm);
+    setIsAddPengawasOpen(false);
+    setPengawasForm({
+      nama: '',
+      username: '',
+      noHp: '',
+      password: '123',
+      asrama: 'Koordinator / Pengawas Utama Kesantrian',
+    });
+    showNotification('✅ Akun Pengawas baru berhasil dibuat & siap bertugas!');
   };
 
   const handleCreateSantri = (e: React.FormEvent) => {
@@ -299,156 +344,281 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Tab Selector Nav */}
-        <div className="grid grid-cols-4 gap-1 bg-slate-200/80 p-1 rounded-2xl text-[11px] font-bold text-center">
-          <button
-            onClick={() => setActiveTab('santri')}
-            className={`py-2 px-1 rounded-xl transition ${
-              activeTab === 'santri' ? 'bg-teal-800 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Data Santri
-          </button>
-          <button
-            onClick={() => setActiveTab('musyrif')}
-            className={`py-2 px-1 rounded-xl transition ${
-              activeTab === 'musyrif' ? 'bg-teal-800 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Data Musyrif
-          </button>
-          <button
-            onClick={() => setActiveTab('kegiatan')}
-            className={`py-2 px-1 rounded-xl transition ${
-              activeTab === 'kegiatan' ? 'bg-teal-800 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Kegiatan
-          </button>
-          <button
-            onClick={() => setActiveTab('periode')}
-            className={`py-2 px-1 rounded-xl transition ${
-              activeTab === 'periode' ? 'bg-teal-800 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Periode
-          </button>
-        </div>
+
 
         {/* ================================================================= */}
-        {/* TAB 1: DATA SANTRI & SAMBUNGKAN KE MUSYRIF PEMBIMBING */}
+        {/* TAB 1: DATA PENGGUNA (SEMUA ROLE: SANTRI, MUSYRIF, PENGAWAS, ADMIN) */}
         {/* ================================================================= */}
         {activeTab === 'santri' && (
           <div className="space-y-3">
-            
-            {/* Header Santri + Tombol Tambah */}
+            {/* Header Data Pengguna */}
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Daftar Santri ({santriList.length})
+                  Data Pengguna ({allUsers.length})
                 </h3>
-                <p className="text-[10px] text-slate-500">Kaitkan tiap santri ke Musyrif pembimbingnya</p>
+                <p className="text-[10px] text-slate-500">Kelola akun Santri, Musyrif, Pengawas, & Super Admin</p>
               </div>
-              <button
-                onClick={() => setIsAddSantriOpen(true)}
-                className="inline-flex items-center gap-1 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Santri</span>
-              </button>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                <button
+                  onClick={() => setIsAddSantriOpen(true)}
+                  className="inline-flex items-center gap-1 bg-teal-700 hover:bg-teal-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Santri</span>
+                </button>
+
+                <button
+                  onClick={() => setIsAddMusyrifOpen(true)}
+                  className="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Musyrif</span>
+                </button>
+
+                <button
+                  onClick={() => setIsAddPengawasOpen(true)}
+                  className="inline-flex items-center gap-1 bg-sky-700 hover:bg-sky-800 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-xl shadow-xs transition"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Pengawas</span>
+                </button>
+              </div>
             </div>
 
-            {/* List Santri Card */}
-            <div className="space-y-2.5">
-              {santriList.map((santri) => (
-                <div
-                  key={santri.id}
-                  className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm space-y-2.5"
+            {/* Filter Role & Search Toolbar */}
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Cari nama, NIS, username, atau no HP..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              {/* Role Filter Tabs */}
+              <div className="flex gap-1 overflow-x-auto pb-1 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-xl shrink-0 transition ${
+                    userRoleFilter === 'ALL'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={santri.avatarUrl}
-                        alt={santri.nama}
-                        className="w-10 h-10 rounded-full object-cover border border-teal-500/30 shrink-0"
-                      />
-                      <div>
-                        <div className="text-xs font-bold text-slate-800">{santri.nama}</div>
-                        <div className="text-[10px] text-slate-400">
-                          NIS: <span className="font-mono font-bold text-slate-600">{santri.username}</span> • PIN: <span className="font-mono text-teal-700 font-bold">{santri.password}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500">{santri.asrama}</div>
-                      </div>
-                    </div>
+                  Semua ({allUsers.length})
+                </button>
 
-                    <div className="flex items-center gap-2">
-                      <div className="text-right">
-                        <span className="text-xs font-extrabold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
-                          {santri.totalPoin} Poin
-                        </span>
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('SANTRI')}
+                  className={`px-2.5 py-1 rounded-xl shrink-0 transition ${
+                    userRoleFilter === 'SANTRI'
+                      ? 'bg-teal-700 text-white shadow-2xs'
+                      : 'bg-teal-50 text-teal-700 hover:bg-teal-100'
+                  }`}
+                >
+                  Santri ({santriList.length})
+                </button>
 
-                      {/* Tombol Edit Santri */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditSantriForm({
-                            id: santri.id,
-                            nama: santri.nama,
-                            username: santri.username,
-                            noHp: santri.noHp,
-                            password: santri.password,
-                            asrama: santri.asrama || '',
-                            musyrifId: santri.musyrifId || '',
-                          });
-                          setIsEditSantriOpen(true);
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-100 text-slate-500 hover:text-teal-700 transition"
-                        title="Edit Data Santri"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('MUSYRIF')}
+                  className={`px-2.5 py-1 rounded-xl shrink-0 transition ${
+                    userRoleFilter === 'MUSYRIF'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                  }`}
+                >
+                  Musyrif / PJ ({musyrifList.length})
+                </button>
 
-                      {/* Tombol Hapus Santri */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Hapus data akun santri "${santri.nama}"?`)) {
-                            deleteUser(santri.id);
-                            showNotification(`🗑️ Akun santri ${santri.nama} berhasil dihapus.`);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition"
-                        title="Hapus Santri"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('PENGAWAS')}
+                  className={`px-2.5 py-1 rounded-xl shrink-0 transition ${
+                    userRoleFilter === 'PENGAWAS'
+                      ? 'bg-sky-700 text-white shadow-2xs'
+                      : 'bg-sky-50 text-sky-800 hover:bg-sky-100'
+                  }`}
+                >
+                  Pengawas ({pengawasList.length})
+                </button>
 
-                  {/* KONEKSI / SAMBUNGKAN KE MUSYRIF PENANGGUNG JAWAB */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl">
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                      <LinkIcon className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Musyrif Pembimbing:</span>
-                    </div>
+                <button
+                  type="button"
+                  onClick={() => setUserRoleFilter('SUPER_ADMIN')}
+                  className={`px-2.5 py-1 rounded-xl shrink-0 transition ${
+                    userRoleFilter === 'SUPER_ADMIN'
+                      ? 'bg-emerald-800 text-white shadow-2xs'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  }`}
+                >
+                  Super Admin ({allUsers.filter((u) => u.role === 'SUPER_ADMIN').length})
+                </button>
+              </div>
+            </div>
 
-                    {/* Live Selector Musyrif */}
-                    <select
-                      value={santri.musyrifId || ''}
-                      onChange={(e) => handleAssignMusyrif(santri.id, e.target.value)}
-                      className="text-xs py-1 px-2 bg-white border border-teal-300 rounded-lg text-teal-900 font-bold focus:ring-1 focus:ring-teal-500 shadow-sm"
+            {/* List User Cards */}
+            <div className="space-y-2.5">
+              {allUsers
+                .filter((u) => {
+                  const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+                  const matchQuery =
+                    userSearchQuery === '' ||
+                    u.nama.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    u.noHp.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    (u.asrama && u.asrama.toLowerCase().includes(userSearchQuery.toLowerCase()));
+                  return matchRole && matchQuery;
+                })
+                .map((u) => {
+                  return (
+                    <div
+                      key={u.id}
+                      className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm space-y-2.5 hover:border-slate-300 transition"
                     >
-                      <option value="" disabled>Pilih Musyrif</option>
-                      {musyrifList.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.nama} ({m.asrama ? m.asrama.split(' ')[1] || 'Musyrif' : 'Musyrif'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={u.avatarUrl}
+                            alt={u.nama}
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-900 truncate">{u.nama}</span>
+                              {u.role === 'SANTRI' && (
+                                <span className="text-[9px] font-bold bg-teal-50 text-teal-800 px-1.5 py-0.2 rounded border border-teal-200 shrink-0">
+                                  Santri
+                                </span>
+                              )}
+                              {u.role === 'MUSYRIF' && (
+                                <span className="text-[9px] font-bold bg-amber-50 text-amber-800 px-1.5 py-0.2 rounded border border-amber-200 shrink-0">
+                                  Musyrif / PJ
+                                </span>
+                              )}
+                              {u.role === 'PENGAWAS' && (
+                                <span className="text-[9px] font-bold bg-sky-50 text-sky-800 px-1.5 py-0.2 rounded border border-sky-200 shrink-0">
+                                  Pengawas
+                                </span>
+                              )}
+                              {u.role === 'SUPER_ADMIN' && (
+                                <span className="text-[9px] font-bold bg-emerald-50 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-200 shrink-0">
+                                  Super Admin
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              User: <span className="font-mono font-bold text-slate-700">{u.username}</span> • PIN: <span className="font-mono text-teal-700 font-bold">{u.password}</span> • 📱 {u.noHp}
+                            </div>
+                            <div className="text-[10px] text-slate-500 truncate">{u.asrama || u.pondokNama}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {u.role === 'SANTRI' && (
+                            <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                              {u.totalPoin} Poin
+                            </span>
+                          )}
+
+                          {/* Edit Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (u.role === 'SANTRI') {
+                                setEditSantriForm({
+                                  id: u.id,
+                                  nama: u.nama,
+                                  username: u.username,
+                                  noHp: u.noHp,
+                                  password: u.password,
+                                  asrama: u.asrama || '',
+                                  musyrifId: u.musyrifId || '',
+                                });
+                                setIsEditSantriOpen(true);
+                              } else if (u.role === 'MUSYRIF') {
+                                setEditMusyrifForm({
+                                  id: u.id,
+                                  nama: u.nama,
+                                  username: u.username,
+                                  noHp: u.noHp,
+                                  password: u.password,
+                                  asrama: u.asrama || '',
+                                });
+                                setIsEditMusyrifOpen(true);
+                              } else if (u.role === 'PENGAWAS') {
+                                setEditPengawasForm({
+                                  id: u.id,
+                                  nama: u.nama,
+                                  username: u.username,
+                                  noHp: u.noHp,
+                                  password: u.password,
+                                  asrama: u.asrama || '',
+                                });
+                                setIsEditPengawasOpen(true);
+                              } else {
+                                alert('Akun Super Admin Utama tidak dapat diubah dari sini.');
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-teal-100 text-slate-500 hover:text-teal-700 transition"
+                            title="Edit Data User"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Delete Button (kecuali Super Admin) */}
+                          {u.role !== 'SUPER_ADMIN' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Hapus data akun "${u.nama}" (${u.role})?`)) {
+                                  deleteUser(u.id);
+                                  showNotification(`🗑️ Akun ${u.nama} berhasil dihapus.`);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition"
+                              title="Hapus Akun"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Khusus Santri: Selector Musyrif Pembimbing */}
+                      {u.role === 'SANTRI' && (
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                            <LinkIcon className="w-3.5 h-3.5 text-teal-600" />
+                            <span>Musyrif Pembimbing:</span>
+                          </div>
+
+                          <select
+                            value={u.musyrifId || ''}
+                            onChange={(e) => handleAssignMusyrif(u.id, e.target.value)}
+                            className="text-xs py-1 px-2 bg-white border border-teal-300 rounded-lg text-teal-900 font-bold focus:ring-1 focus:ring-teal-500 shadow-xs"
+                          >
+                            <option value="" disabled>Pilih Musyrif</option>
+                            {musyrifList.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.nama} ({m.asrama ? m.asrama.split(' ')[1] || 'Musyrif' : 'Musyrif'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -925,6 +1095,65 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* ============================================================= */}
+      {/* BOTTOM NAVBAR SUPER ADMIN */}
+      {/* ============================================================= */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-3 py-2">
+        <div className="max-w-md mx-auto grid grid-cols-4 gap-1 text-center">
+          <button
+            type="button"
+            onClick={() => setActiveTab('santri')}
+            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+              activeTab === 'santri'
+                ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Users className={`w-4 h-4 ${activeTab === 'santri' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
+            <span className="text-[10px]">Data Santri</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('musyrif')}
+            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+              activeTab === 'musyrif'
+                ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <UserCheck className={`w-4 h-4 ${activeTab === 'musyrif' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
+            <span className="text-[10px]">Data Musyrif</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('kegiatan')}
+            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+              activeTab === 'kegiatan'
+                ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sparkles className={`w-4 h-4 ${activeTab === 'kegiatan' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
+            <span className="text-[10px]">Bobot Poin</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('periode')}
+            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+              activeTab === 'periode'
+                ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Award className={`w-4 h-4 ${activeTab === 'periode' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
+            <span className="text-[10px]">Periode Reward</span>
+          </button>
+        </div>
+      </nav>
+
       {/* ================================================================= */}
       {/* MODAL TAMBAH SANTRI & SAMBUNGKAN KE MUSYRIF */}
       {/* ================================================================= */}
@@ -1118,6 +1347,96 @@ export default function AdminPage() {
                 className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow mt-2"
               >
                 Simpan & Aktifkan Musyrif
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL TAMBAH PENGAWAS KESANTRIAN */}
+      {/* ================================================================= */}
+      {isAddPengawasOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-sky-900 font-bold text-sm">
+                <ShieldCheck className="w-5 h-5 text-sky-600" />
+                <span>Buat Akun Pengawas Baru</span>
+              </div>
+              <button
+                onClick={() => setIsAddPengawasOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePengawas} className="space-y-2.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Ustadz Dr. H. Usman Ridwan, M.Pd."
+                  value={pengawasForm.nama}
+                  onChange={(e) => setPengawasForm({ ...pengawasForm, nama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Username Login</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="pengawas.usman"
+                    value={pengawasForm.username}
+                    onChange={(e) => setPengawasForm({ ...pengawasForm, username: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Password / PIN</label>
+                  <input
+                    type="text"
+                    required
+                    value={pengawasForm.password}
+                    onChange={(e) => setPengawasForm({ ...pengawasForm, password: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">No. WhatsApp Pengawas</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="0812XXXXXXXX"
+                  value={pengawasForm.noHp}
+                  onChange={(e) => setPengawasForm({ ...pengawasForm, noHp: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Jabatan / Tanggung Jawab</label>
+                <input
+                  type="text"
+                  placeholder="Koordinator / Pengawas Utama Kesantrian"
+                  value={pengawasForm.asrama}
+                  onChange={(e) => setPengawasForm({ ...pengawasForm, asrama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-sky-700 hover:bg-sky-800 text-white font-bold rounded-xl shadow mt-2"
+              >
+                Simpan & Aktifkan Pengawas
               </button>
             </form>
           </div>
@@ -1731,6 +2050,106 @@ export default function AdminPage() {
                 className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow mt-2"
               >
                 Simpan Perubahan Musyrif
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL EDIT DATA PENGAWAS */}
+      {/* ================================================================= */}
+      {isEditPengawasOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-sky-900 font-bold text-sm">
+                <Edit className="w-4 h-4 text-sky-600" />
+                <span>Edit Data Pengawas</span>
+              </div>
+              <button
+                onClick={() => setIsEditPengawasOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                updateUser(editPengawasForm.id, {
+                  nama: editPengawasForm.nama.trim(),
+                  username: editPengawasForm.username.trim(),
+                  noHp: editPengawasForm.noHp.trim(),
+                  password: editPengawasForm.password.trim(),
+                  asrama: editPengawasForm.asrama.trim(),
+                });
+                setIsEditPengawasOpen(false);
+                showNotification(`✅ Data pengawas ${editPengawasForm.nama} berhasil diperbarui!`);
+              }}
+              className="space-y-2.5 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
+                <input
+                  type="text"
+                  required
+                  value={editPengawasForm.nama}
+                  onChange={(e) => setEditPengawasForm({ ...editPengawasForm, nama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Username Login</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPengawasForm.username}
+                    onChange={(e) => setEditPengawasForm({ ...editPengawasForm, username: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Password / PIN</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPengawasForm.password}
+                    onChange={(e) => setEditPengawasForm({ ...editPengawasForm, password: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">No. WhatsApp Pengawas</label>
+                <input
+                  type="text"
+                  required
+                  value={editPengawasForm.noHp}
+                  onChange={(e) => setEditPengawasForm({ ...editPengawasForm, noHp: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Jabatan / Deskripsi Tugas</label>
+                <input
+                  type="text"
+                  value={editPengawasForm.asrama}
+                  onChange={(e) => setEditPengawasForm({ ...editPengawasForm, asrama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-sky-700 hover:bg-sky-800 text-white font-bold rounded-xl shadow mt-2"
+              >
+                Simpan Perubahan Pengawas
               </button>
             </form>
           </div>

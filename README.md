@@ -34,7 +34,7 @@ RajinQu adalah aplikasi web modern berbasis *Mobile-First* yang dirancang khusus
 - **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS, Lucide React, Recharts
 - **Database & ORM**: PostgreSQL (Neon DB ready) + Prisma ORM
 - **Storage Bukti**: Google Drive via Google Apps Script Web App
-- **WhatsApp Notification**: Fonnte / Wablas Gateway API
+- **WhatsApp Notification**: Direct WhatsApp Web / App Link Integration (`wa.me`) & Interactive Confirmation Modals
 - **Cron Jobs**: Vercel Cron (`/api/cron/reminder-1900`)
 
 ---
@@ -54,7 +54,6 @@ cp .env.example .env
 
 Isi variabel konfigurasi:
 - `DATABASE_URL`: URL PostgreSQL dari Neon DB
-- `FONNTE_API_TOKEN`: Token API dari [fonnte.com](https://fonnte.com)
 - `GOOGLE_APPS_SCRIPT_URL`: URL Web App dari deployment Google Apps Script
 
 ### 3. Generate Prisma Client (Jika menggunakan Database)
