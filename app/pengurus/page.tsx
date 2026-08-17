@@ -151,8 +151,9 @@ export default function PengurusPage() {
 
   const approvedLaporans = laporanList.filter((l) => l.status === 'APPROVED');
 
-  // Filter Laporan untuk Feed Seluruh Santri
+  // Filter Laporan untuk Feed Seluruh Santri (Hanya yang sudah disetujui / APPROVED)
   const filteredFeed = laporanList.filter((lap) => {
+    if (lap.status !== 'APPROVED') return false;
     const matchCategory = feedFilter === 'ALL' || lap.kategori === feedFilter;
     const matchSearch =
       feedSearch === '' ||
