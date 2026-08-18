@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { sendDailyReminderToSantri } from '@/lib/whatsapp';
 import { MOCK_USERS } from '@/lib/mock-data';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Endpoint Cron Job untuk Pengingat Jam 19.00 WIB
  * Bisa di-trigger oleh Vercel Cron (vercel.json) setiap hari pukul 19.00 WIB (12:00 UTC)
