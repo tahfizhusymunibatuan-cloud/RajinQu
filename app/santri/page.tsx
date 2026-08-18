@@ -315,7 +315,7 @@ export default function SantriPage() {
                 const place = addr.amenity || addr.building || addr.road || addr.village || addr.suburb || addr.neighbourhood || '';
                 const district = addr.city_district || addr.county || addr.city || addr.town || addr.municipality || '';
                 const state = addr.state || '';
-                
+
                 const parts = [place, district, state].filter(Boolean);
                 readableName = parts.length > 0 ? parts.join(', ') : data.display_name.split(',').slice(0, 3).join(', ');
               } else if (data.display_name) {
@@ -581,7 +581,7 @@ export default function SantriPage() {
 
   return (
     <div className="app-mobile-container bg-slate-50 min-h-screen pb-24 shadow-xl border-x border-slate-200">
-      
+
       {/* Top Header */}
       <header className="sticky top-0 z-30 bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-900 text-white px-4 py-3.5 shadow-md">
         <div className="flex items-center justify-between">
@@ -693,156 +693,155 @@ export default function SantriPage() {
                   const authorAvatar = authorInfo?.avatarUrl || lap.userAvatar;
 
                   return (
-                  <div
-                    key={lap.id}
-                    className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
-                  >
-                    {/* Header Card */}
-                    <div className="p-3 flex items-center justify-between border-b border-slate-100">
-                      <div className="flex items-center gap-2.5">
-                        <img
-                          src={authorAvatar}
-                          alt={authorNama}
-                          className="w-9 h-9 rounded-full object-cover border border-teal-500/30"
-                        />
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-slate-800">{authorNama}</span>
-                            {authorKelompok && (
-                              <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded-md">
-                                {authorKelompok}
-                              </span>
-                            )}
-                            
-                            {/* Badge Status Waktu WIB */}
-                            {lap.statusWaktu === 'TERLAMBAT' ? (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                ⏳ Terlambat
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                ✓ Tepat Waktu
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">{lap.createdAt}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right">
-                        <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-                          +{lap.poin} Poin
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Foto Bukti (Rasio Potret 3:4) */}
-                    <div className="relative bg-slate-900 aspect-[3/4] w-full overflow-hidden">
-                      <img
-                        src={formatDriveImageUrl(lap.fotoUrl)}
-                        alt={lap.kegiatanNama}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-2 left-2 bg-slate-950/70 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-amber-400" />
-                        <span>{lap.kegiatanNama}</span>
-                      </div>
-
-                      <div className="absolute bottom-2 left-2 right-2 bg-slate-950/75 backdrop-blur-md text-white text-[10px] p-1.5 rounded-lg flex items-center gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                        <span className="truncate">{lap.lokasiName}</span>
-                      </div>
-                    </div>
-
-                    {/* Body & Caption */}
-                    <div className="p-3">
-                      <p className="text-xs text-slate-700 leading-relaxed">
-                        {lap.catatanSantri}
-                      </p>
-
-                      {/* Musyrif Approval Note jika ada */}
-                      {lap.catatanPengurus && (
-                        <div className="mt-2 p-2 bg-teal-50/80 rounded-xl border border-teal-200/60 text-[11px] text-teal-800 flex items-start gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                    <div
+                      key={lap.id}
+                      className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+                    >
+                      {/* Header Card */}
+                      <div className="p-3 flex items-center justify-between border-b border-slate-100">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={authorAvatar}
+                            alt={authorNama}
+                            className="w-9 h-9 rounded-full object-cover border border-teal-500/30"
+                          />
                           <div>
-                            <span className="font-semibold">Catatan Musyrif: </span>
-                            <span>{lap.catatanPengurus}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-slate-800">{authorNama}</span>
+                              {authorKelompok && (
+                                <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                                  {authorKelompok}
+                                </span>
+                              )}
+
+                              {/* Badge Status Waktu WIB */}
+                              {lap.statusWaktu === 'TERLAMBAT' ? (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                  ⏳ Terlambat
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  ✓ Tepat Waktu
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">{lap.createdAt}</div>
                           </div>
                         </div>
-                      )}
 
-                      {/* Action Bar (Like, Komentar) */}
-                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <button
-                            onClick={() => toggleLike(lap.id, user?.id || 'guest')}
-                            className={`flex items-center gap-1.5 text-xs font-semibold transition ${
-                              lap.isLikedByUser ? 'text-rose-500' : 'text-slate-500 hover:text-slate-700'
-                            }`}
-                          >
-                            <Heart className={`w-4 h-4 ${lap.isLikedByUser ? 'fill-rose-500' : ''}`} />
-                            <span>{lap.likesCount}</span>
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              setShowCommentBox({
-                                ...showCommentBox,
-                                [lap.id]: !showCommentBox[lap.id],
-                              })
-                            }
-                            className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            <span>{lap.comments.length} Komentar</span>
-                          </button>
+                        <div className="text-right">
+                          <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+                            +{lap.poin} Poin
+                          </span>
                         </div>
-
-                        <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                          {lap.status === 'APPROVED' ? '✓ Terverifikasi' : '⏳ Sedang Ditinjau'}
-                        </span>
                       </div>
 
-                      {/* Komentar Section */}
-                      {showCommentBox[lap.id] && (
-                        <div className="mt-3 pt-2 border-t border-slate-100 space-y-2">
-                          {/* List Comments */}
-                          {lap.comments.map((comm) => (
-                            <div key={comm.id} className="text-xs bg-slate-50 p-2 rounded-xl">
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-slate-800 text-[11px]">{comm.nama}</span>
-                                <span className="text-[9px] text-slate-400">{comm.waktu}</span>
-                              </div>
-                              <p className="text-slate-600 text-[11px] mt-0.5">{comm.isi}</p>
-                            </div>
-                          ))}
+                      {/* Foto Bukti (Rasio Potret 3:4) */}
+                      <div className="relative bg-slate-900 aspect-[3/4] w-full overflow-hidden">
+                        <img
+                          src={formatDriveImageUrl(lap.fotoUrl)}
+                          alt={lap.kegiatanNama}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 left-2 bg-slate-950/70 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          <span>{lap.kegiatanNama}</span>
+                        </div>
 
-                          {/* Add Comment Input */}
-                          <div className="flex items-center gap-1.5 pt-1">
-                            <input
-                              type="text"
-                              value={commentInput[lap.id] || ''}
-                              onChange={(e) =>
-                                setCommentInput({ ...commentInput, [lap.id]: e.target.value })
-                              }
-                              placeholder="Tulis komentar penyemangat..."
-                              className="flex-1 text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSendComment(lap.id);
-                              }}
-                            />
+                        <div className="absolute bottom-2 left-2 right-2 bg-slate-950/75 backdrop-blur-md text-white text-[10px] p-1.5 rounded-lg flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          <span className="truncate">{lap.lokasiName}</span>
+                        </div>
+                      </div>
+
+                      {/* Body & Caption */}
+                      <div className="p-3">
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          {lap.catatanSantri}
+                        </p>
+
+                        {/* Musyrif Approval Note jika ada */}
+                        {lap.catatanPengurus && (
+                          <div className="mt-2 p-2 bg-teal-50/80 rounded-xl border border-teal-200/60 text-[11px] text-teal-800 flex items-start gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-semibold">Catatan Musyrif: </span>
+                              <span>{lap.catatanPengurus}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Bar (Like, Komentar) */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-4">
                             <button
-                              onClick={() => handleSendComment(lap.id)}
-                              className="p-1.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700"
+                              onClick={() => toggleLike(lap.id, user?.id || 'guest')}
+                              className={`flex items-center gap-1.5 text-xs font-semibold transition ${lap.isLikedByUser ? 'text-rose-500' : 'text-slate-500 hover:text-slate-700'
+                                }`}
                             >
-                              <Send className="w-3.5 h-3.5" />
+                              <Heart className={`w-4 h-4 ${lap.isLikedByUser ? 'fill-rose-500' : ''}`} />
+                              <span>{lap.likesCount}</span>
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                setShowCommentBox({
+                                  ...showCommentBox,
+                                  [lap.id]: !showCommentBox[lap.id],
+                                })
+                              }
+                              className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 transition"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              <span>{lap.comments.length} Komentar</span>
                             </button>
                           </div>
+
+                          <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
+                            {lap.status === 'APPROVED' ? '✓ Terverifikasi' : '⏳ Sedang Ditinjau'}
+                          </span>
                         </div>
-                      )}
+
+                        {/* Komentar Section */}
+                        {showCommentBox[lap.id] && (
+                          <div className="mt-3 pt-2 border-t border-slate-100 space-y-2">
+                            {/* List Comments */}
+                            {lap.comments.map((comm) => (
+                              <div key={comm.id} className="text-xs bg-slate-50 p-2 rounded-xl">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-slate-800 text-[11px]">{comm.nama}</span>
+                                  <span className="text-[9px] text-slate-400">{comm.waktu}</span>
+                                </div>
+                                <p className="text-slate-600 text-[11px] mt-0.5">{comm.isi}</p>
+                              </div>
+                            ))}
+
+                            {/* Add Comment Input */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <input
+                                type="text"
+                                value={commentInput[lap.id] || ''}
+                                onChange={(e) =>
+                                  setCommentInput({ ...commentInput, [lap.id]: e.target.value })
+                                }
+                                placeholder="Tulis komentar penyemangat..."
+                                className="flex-1 text-xs bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSendComment(lap.id);
+                                }}
+                              />
+                              <button
+                                onClick={() => handleSendComment(lap.id)}
+                                className="p-1.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   );
                 })
               )}
@@ -878,9 +877,8 @@ export default function SantriPage() {
                 return (
                   <div
                     key={keg.id}
-                    className={`bg-white rounded-2xl p-3.5 border transition ${
-                      isCompleted ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200 hover:border-teal-300'
-                    } shadow-sm`}
+                    className={`bg-white rounded-2xl p-3.5 border transition ${isCompleted ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200 hover:border-teal-300'
+                      } shadow-sm`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-3">
@@ -902,15 +900,14 @@ export default function SantriPage() {
                                 const cd = calculateActivityCountdown(keg.jamMulai, keg.jamSelesai);
                                 return (
                                   <span
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${
-                                      cd.status === 'SEDANG_DIBUKA'
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                        : cd.status === 'SEGERA_BERAKHIR'
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${cd.status === 'SEDANG_DIBUKA'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                      : cd.status === 'SEGERA_BERAKHIR'
                                         ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                         : cd.status === 'BERAKHIR'
-                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                                    }`}
+                                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                                      }`}
                                   >
                                     <Clock className="w-3 h-3 text-slate-500" />
                                     <span>{keg.targetWaktu}</span>
@@ -1032,9 +1029,8 @@ export default function SantriPage() {
                   return (
                     <div
                       key={santri.id}
-                      className={`p-3 flex items-center justify-between ${
-                        isCurrent ? 'bg-amber-50/70 font-semibold' : ''
-                      }`}
+                      className={`p-3 flex items-center justify-between ${isCurrent ? 'bg-amber-50/70 font-semibold' : ''
+                        }`}
                     >
                       <div className="flex items-center gap-3">
                         <span className="w-6 text-center text-xs font-bold text-slate-500">
@@ -1079,33 +1075,29 @@ export default function SantriPage() {
             <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl text-xs font-medium">
               <button
                 onClick={() => setRiwayatFilter('ALL')}
-                className={`flex-1 py-1.5 rounded-lg transition ${
-                  riwayatFilter === 'ALL' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'text-slate-600'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg transition ${riwayatFilter === 'ALL' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 Semua
               </button>
               <button
                 onClick={() => setRiwayatFilter('APPROVED')}
-                className={`flex-1 py-1.5 rounded-lg transition ${
-                  riwayatFilter === 'APPROVED' ? 'bg-white text-emerald-700 font-bold shadow-sm' : 'text-slate-600'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg transition ${riwayatFilter === 'APPROVED' ? 'bg-white text-emerald-700 font-bold shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 Disetujui
               </button>
               <button
                 onClick={() => setRiwayatFilter('PENDING')}
-                className={`flex-1 py-1.5 rounded-lg transition ${
-                  riwayatFilter === 'PENDING' ? 'bg-white text-amber-700 font-bold shadow-sm' : 'text-slate-600'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg transition ${riwayatFilter === 'PENDING' ? 'bg-white text-amber-700 font-bold shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 Menunggu
               </button>
               <button
                 onClick={() => setRiwayatFilter('REJECTED')}
-                className={`flex-1 py-1.5 rounded-lg transition ${
-                  riwayatFilter === 'REJECTED' ? 'bg-white text-rose-700 font-bold shadow-sm' : 'text-slate-600'
-                }`}
+                className={`flex-1 py-1.5 rounded-lg transition ${riwayatFilter === 'REJECTED' ? 'bg-white text-rose-700 font-bold shadow-sm' : 'text-slate-600'
+                  }`}
               >
                 Ditolak
               </button>
@@ -1353,7 +1345,7 @@ export default function SantriPage() {
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
           <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 max-h-[92vh] flex flex-col">
-            
+
             {/* Header Modal */}
             <div className="bg-gradient-to-r from-teal-700 to-emerald-800 text-white p-4 flex items-center justify-between">
               <div>
@@ -1371,7 +1363,7 @@ export default function SantriPage() {
 
             {/* Form Scrollable Content */}
             <form onSubmit={handleSubmitLaporan} className="p-4 overflow-y-auto space-y-3.5 flex-1">
-              
+
               {/* Hidden Canvas untuk Capture Snapshot */}
               <canvas ref={canvasRef} className="hidden" />
 
@@ -1412,22 +1404,20 @@ export default function SantriPage() {
                   <button
                     type="button"
                     onClick={() => switchFacingMode('user')}
-                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
-                      facingMode === 'user'
-                        ? 'bg-teal-700 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${facingMode === 'user'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     <span>🤳 Kamera Depan (Selfie)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => switchFacingMode('environment')}
-                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
-                      facingMode === 'environment'
-                        ? 'bg-teal-700 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                    className={`flex-1 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${facingMode === 'environment'
+                      ? 'bg-teal-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                      }`}
                   >
                     <span>📷 Kamera Belakang</span>
                   </button>
@@ -1439,43 +1429,39 @@ export default function SantriPage() {
                   <button
                     type="button"
                     onClick={() => setCameraRatio('3/4')}
-                    className={`flex-1 py-1 rounded-lg transition text-center ${
-                      cameraRatio === '3/4'
-                        ? 'bg-white text-slate-900 font-bold shadow-xs'
-                        : 'hover:text-slate-900'
-                    }`}
+                    className={`flex-1 py-1 rounded-lg transition text-center ${cameraRatio === '3/4'
+                      ? 'bg-white text-slate-900 font-bold shadow-xs'
+                      : 'hover:text-slate-900'
+                      }`}
                   >
                     📱 3:4 (Potret)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCameraRatio('1/1')}
-                    className={`flex-1 py-1 rounded-lg transition text-center ${
-                      cameraRatio === '1/1'
-                        ? 'bg-white text-slate-900 font-bold shadow-xs'
-                        : 'hover:text-slate-900'
-                    }`}
+                    className={`flex-1 py-1 rounded-lg transition text-center ${cameraRatio === '1/1'
+                      ? 'bg-white text-slate-900 font-bold shadow-xs'
+                      : 'hover:text-slate-900'
+                      }`}
                   >
                     🔲 1:1 (Kotak)
                   </button>
                   <button
                     type="button"
                     onClick={() => setCameraRatio('16/9')}
-                    className={`flex-1 py-1 rounded-lg transition text-center ${
-                      cameraRatio === '16/9'
-                        ? 'bg-white text-slate-900 font-bold shadow-xs'
-                        : 'hover:text-slate-900'
-                    }`}
+                    className={`flex-1 py-1 rounded-lg transition text-center ${cameraRatio === '16/9'
+                      ? 'bg-white text-slate-900 font-bold shadow-xs'
+                      : 'hover:text-slate-900'
+                      }`}
                   >
                     📺 16:9
                   </button>
                 </div>
-                
+
                 {photoPreview ? (
                   /* Preview Foto Setelah Dipotret */
-                  <div className={`relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 shadow-inner mx-auto w-full ${
-                    cameraRatio === '3/4' ? 'aspect-[3/4] max-h-[350px]' : cameraRatio === '1/1' ? 'aspect-square max-h-[310px]' : 'aspect-video'
-                  }`}>
+                  <div className={`relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 shadow-inner mx-auto w-full ${cameraRatio === '3/4' ? 'aspect-[3/4] max-h-[350px]' : cameraRatio === '1/1' ? 'aspect-square max-h-[310px]' : 'aspect-video'
+                    }`}>
                     <img
                       src={photoPreview}
                       alt="Hasil Foto"
@@ -1499,18 +1485,16 @@ export default function SantriPage() {
                   </div>
                 ) : (
                   /* Viewfinder Live Kamera */
-                  <div className={`relative rounded-2xl overflow-hidden border-2 border-teal-500 bg-slate-950 flex flex-col items-center justify-center shadow-md mx-auto w-full transition-all duration-300 ${
-                    cameraRatio === '3/4' ? 'aspect-[3/4] max-h-[350px]' : cameraRatio === '1/1' ? 'aspect-square max-h-[310px]' : 'aspect-video'
-                  }`}>
+                  <div className={`relative rounded-2xl overflow-hidden border-2 border-teal-500 bg-slate-950 flex flex-col items-center justify-center shadow-md mx-auto w-full transition-all duration-300 ${cameraRatio === '3/4' ? 'aspect-[3/4] max-h-[350px]' : cameraRatio === '1/1' ? 'aspect-square max-h-[310px]' : 'aspect-video'
+                    }`}>
                     {/* Live Video Element */}
                     <video
                       ref={videoRef}
                       autoPlay
                       playsInline
                       muted
-                      className={`w-full h-full object-cover transition-transform duration-200 ${
-                        facingMode === 'user' ? '-scale-x-100' : 'scale-x-100'
-                      }`}
+                      className={`w-full h-full object-cover transition-transform duration-200 ${facingMode === 'user' ? '-scale-x-100' : 'scale-x-100'
+                        }`}
                     />
 
                     {/* Top Status & Quick Flip Button */}
@@ -1625,11 +1609,10 @@ export default function SantriPage() {
                   );
 
                   return (
-                    <div className={`p-2 rounded-xl border text-[11px] flex items-start gap-1.5 ${
-                      check.statusWaktu === 'TEPAT_WAKTU'
-                        ? 'bg-emerald-50/80 text-emerald-900 border-emerald-200'
-                        : 'bg-amber-50 text-amber-900 border-amber-200'
-                    }`}>
+                    <div className={`p-2 rounded-xl border text-[11px] flex items-start gap-1.5 ${check.statusWaktu === 'TEPAT_WAKTU'
+                      ? 'bg-emerald-50/80 text-emerald-900 border-emerald-200'
+                      : 'bg-amber-50 text-amber-900 border-amber-200'
+                      }`}>
                       <Clock className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${check.statusWaktu === 'TEPAT_WAKTU' ? 'text-emerald-600' : 'text-amber-600'}`} />
                       <div>
                         <div className="font-bold flex items-center gap-1">
@@ -1805,9 +1788,8 @@ export default function SantriPage() {
       <nav className="fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 z-40 flex items-center justify-around shadow-lg">
         <button
           onClick={() => setActiveTab('feed')}
-          className={`flex flex-col items-center p-1.5 transition ${
-            activeTab === 'feed' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className={`flex flex-col items-center p-1.5 transition ${activeTab === 'feed' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
+            }`}
         >
           <Home className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Feed</span>
@@ -1815,9 +1797,8 @@ export default function SantriPage() {
 
         <button
           onClick={() => setActiveTab('tugas')}
-          className={`flex flex-col items-center p-1.5 transition ${
-            activeTab === 'tugas' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className={`flex flex-col items-center p-1.5 transition ${activeTab === 'tugas' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
+            }`}
         >
           <CheckSquare className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Tugas</span>
@@ -1833,9 +1814,8 @@ export default function SantriPage() {
 
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={`flex flex-col items-center p-1.5 transition ${
-            activeTab === 'leaderboard' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className={`flex flex-col items-center p-1.5 transition ${activeTab === 'leaderboard' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
+            }`}
         >
           <Trophy className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Ranking</span>
@@ -1843,9 +1823,8 @@ export default function SantriPage() {
 
         <button
           onClick={() => setActiveTab('profil')}
-          className={`flex flex-col items-center p-1.5 transition ${
-            activeTab === 'profil' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className={`flex flex-col items-center p-1.5 transition ${activeTab === 'profil' ? 'text-teal-700 font-bold' : 'text-slate-400 hover:text-slate-600'
+            }`}
         >
           <UserIcon className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Profil</span>
