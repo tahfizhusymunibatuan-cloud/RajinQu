@@ -15,6 +15,7 @@ datasource db {
 enum Role {
   SUPER_ADMIN
   MUSYRIF
+  PENGAWAS
   SANTRI
 }
 
@@ -45,6 +46,7 @@ model Pondok {
   users       User[]
   kegiatan    Kegiatan[]
   periodes    PeriodeLiburan[]
+  kelompoks   Kelompok[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -68,7 +70,7 @@ model PeriodeLiburan {
 }
 
 // -------------------------------------------------------------------
-// USER (SUPER ADMIN, MUSYRIF, SANTRI)
+// USER (SUPER ADMIN, MUSYRIF, PENGAWAS, SANTRI)
 // -------------------------------------------------------------------
 // Akun dibuat dan dikelola oleh Super Admin
 
@@ -92,6 +94,11 @@ model User {
   musyrif      User?       @relation("MusyrifBinaan", fields: [musyrifId], references: [id], onDelete: SetNull)
   santriBinaan User[]      @relation("MusyrifBinaan")
 
+  // Relasi Kelompok / Halaqah
+  kelompokId      String?
+  kelompok        Kelompok?   @relation("AnggotaKelompok", fields: [kelompokId], references: [id], onDelete: SetNull)
+  kelompokBinaan  Kelompok[]  @relation("MusyrifKelompok")
+
   // Relasi Data Laporan & Interaksi
   laporanDikirim   Laporan[]   @relation("LaporanSantri")
   laporanDiperiksa Laporan[]   @relation("ReviewerPengurus")
@@ -106,22 +113,45 @@ model User {
 }
 
 // -------------------------------------------------------------------
+// KELOMPOK / HALAQAH SANTRI & MUSYRIF
+// -------------------------------------------------------------------
+
+model Kelompok {
+  id          String    @id @default(cuid())
+  nama        String    // Contoh: "Kelompok Abu Amr", "Halaqoh Khadijah"
+  deskripsi   String?   // Keterangan tingkatan / kategori
+  musyrifId   String?   // Musyrif Penanggung Jawab
+  musyrif     User?     @relation("MusyrifKelompok", fields: [musyrifId], references: [id], onDelete: SetNull)
+  anggota     User[]    @relation("AnggotaKelompok")
+  pondokId    String?
+  pondok      Pondok?   @relation(fields: [pondokId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("kelompok")
+}
+
+// -------------------------------------------------------------------
 // MASTER KEGIATAN
 // -------------------------------------------------------------------
 
 model Kegiatan {
-  id          String           @id @default(cuid())
-  nama        String           // Contoh: "Sholat Subuh Berjamaah"
-  deskripsi   String?
-  kategori    KategoriKegiatan @default(IBADAH)
-  poinDefault Int              @default(10)
-  icon        String?          // Nama Lucide icon, misal: "BookOpen", "Sunrise", "Heart"
-  isWajib     Boolean          @default(true)
-  pondokId    String?
-  pondok      Pondok?          @relation(fields: [pondokId], references: [id], onDelete: Cascade)
-  laporans    Laporan[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id               String           @id @default(cuid())
+  nama             String           // Contoh: "Sholat Subuh Berjamaah"
+  deskripsi        String?
+  kategori         KategoriKegiatan @default(IBADAH)
+  poin             Int              @default(10)
+  icon             String?          // Nama Lucide icon
+  isWajib          Boolean          @default(true)
+  isTimeRestricted Boolean          @default(false)
+  jamMulai         String?
+  jamSelesai       String?
+  targetWaktu      String?
+  pondokId         String?
+  pondok           Pondok?          @relation(fields: [pondokId], references: [id], onDelete: Cascade)
+  laporans         Laporan[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@map("kegiatan")
 }
@@ -136,15 +166,18 @@ model Laporan {
   user            User          @relation("LaporanSantri", fields: [userId], references: [id], onDelete: Cascade)
   kegiatanId      String
   kegiatan        Kegiatan      @relation(fields: [kegiatanId], references: [id], onDelete: Restrict)
+  poin            Int           @default(10)
   
   // Bukti Upload
   fotoUrl         String        // URL file dari Google Drive
   gdriveFileId    String?
   
-  // Metadata GPS & Geolocation
+  // Metadata Waktu & Lokasi
+  waktuLaporWIB   String?
+  statusWaktu     String?       // "TEPAT_WAKTU" | "TERLAMBAT"
   lat             Float?
   long            Float?
-  alamatLokasi    String?       // Deskripsi lokasi/reverse geocode jika ada
+  alamatLokasi    String?
   catatanSantri   String?
   
   // Status Validasi Musyrif

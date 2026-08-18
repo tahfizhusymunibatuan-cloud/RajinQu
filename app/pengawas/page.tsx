@@ -53,6 +53,7 @@ export default function PengawasPage() {
     santriList,
     musyrifList,
     kegiatanList,
+    kelompokList,
     activePeriode,
     toggleLike,
     addComment,
@@ -104,34 +105,43 @@ export default function PengawasPage() {
     }
   }, [user, router]);
 
-  // Extract unique asrama / halaqoh list
+  // Extract unique kelompok / asrama / halaqoh list
   const halaqohList = Array.from(
     new Set(
-      musyrifList
-        .map((m) => m.asrama)
-        .filter(Boolean)
-        .concat(santriList.map((s) => s.asrama).filter(Boolean))
+      kelompokList
+        .map((k) => k.nama)
+        .concat(santriList.map((s) => s.kelompokNama || '').filter(Boolean))
+        .concat(musyrifList.map((m) => m.asrama || '').filter(Boolean))
     )
-  ) as string[];
+  ).filter(Boolean) as string[];
 
   // Filtered Laporan across ALL santri
   const filteredLaporan = laporanList.filter((lap) => {
-    const matchHalaqoh = selectedHalaqoh === 'ALL' || lap.userAsrama === selectedHalaqoh;
+    const santriObj = santriList.find((s) => s.id === lap.userId || s.nama === lap.userNama);
+    const matchHalaqoh =
+      selectedHalaqoh === 'ALL' ||
+      lap.userAsrama === selectedHalaqoh ||
+      santriObj?.kelompokNama === selectedHalaqoh;
     const matchStatus = selectedStatus === 'ALL' || lap.status === selectedStatus;
     const matchSearch =
       searchQuery === '' ||
       lap.userNama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lap.kegiatanNama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (santriObj?.kelompokNama && santriObj.kelompokNama.toLowerCase().includes(searchQuery.toLowerCase())) ||
       lap.userAsrama.toLowerCase().includes(searchQuery.toLowerCase());
     return matchHalaqoh && matchStatus && matchSearch;
   });
 
   // Filtered Santri across ALL halaqoh
   const filteredSantri = santriList.filter((s) => {
-    const matchHalaqoh = selectedHalaqoh === 'ALL' || s.asrama === selectedHalaqoh;
+    const matchHalaqoh =
+      selectedHalaqoh === 'ALL' ||
+      s.kelompokNama === selectedHalaqoh ||
+      s.asrama === selectedHalaqoh;
     const matchSearch =
       searchQuery === '' ||
       s.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.kelompokNama && s.kelompokNama.toLowerCase().includes(searchQuery.toLowerCase())) ||
       s.username.toLowerCase().includes(searchQuery.toLowerCase());
     return matchHalaqoh && matchSearch;
   });
@@ -311,13 +321,13 @@ export default function PengawasPage() {
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-600 mb-1">Filter Halaqoh / Asrama:</label>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1">Filter Kelompok:</label>
                   <select
                     value={selectedHalaqoh}
                     onChange={(e) => setSelectedHalaqoh(e.target.value)}
                     className="w-full text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-xl font-medium"
                   >
-                    <option value="ALL">Semua Halaqoh ({santriList.length} Santri)</option>
+                    <option value="ALL">Semua Kelompok ({santriList.length} Santri)</option>
                     {halaqohList.map((h) => (
                       <option key={h} value={h}>
                         {h}
@@ -545,8 +555,15 @@ export default function PengawasPage() {
                         <div className="min-w-0">
                           <div className="text-xs font-bold text-slate-900 truncate">{santri.nama}</div>
                           <div className="text-[10px] text-slate-500 truncate">
-                            NIS: <span className="font-mono font-bold">{santri.username}</span> • {santri.asrama}
+                            NIS: <span className="font-mono font-bold">{santri.username}</span>
                           </div>
+                          {santri.kelompokNama && (
+                            <div className="mt-0.5">
+                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                                {santri.kelompokNama}
+                              </span>
+                            </div>
+                          )}
                           <div className="text-[9px] text-teal-800 font-semibold mt-0.5">
                             Pembimbing: {santri.musyrifNama || 'Belum Ditugaskan'}
                           </div>

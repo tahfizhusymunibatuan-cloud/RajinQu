@@ -38,7 +38,8 @@ import {
   FlipHorizontal,
   Copy,
   ExternalLink,
-  Check
+  Check,
+  Layers,
 } from 'lucide-react';
 import {
   BarChart,
@@ -451,7 +452,7 @@ export default function SantriPage() {
         userId: currentSantriUser?.id || 'user-santri-1',
         userNama: currentSantriUser?.nama || 'Muhammad Faiz Ar-Rasyid',
         userAvatar: currentSantriUser?.avatarUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-        userAsrama: currentSantriUser?.asrama || 'Kelas 3 TMI / Halaqoh Abu Bakar',
+        userAsrama: currentSantriUser?.asrama || 'Kelas 3 TMI',
         kegiatanId: selectedKegiatan.id,
         kegiatanNama: selectedKegiatan.nama,
         kategori: selectedKegiatan.kategori,
@@ -475,7 +476,7 @@ export default function SantriPage() {
 
       const musyrifNama = assignedMusyrif?.nama || currentSantriUser?.musyrifNama || 'Ustadz Pembimbing';
       const musyrifPhone = assignedMusyrif?.noHp || '081288880002';
-      const musyrifAsrama = assignedMusyrif?.asrama || 'Halaqoh Pondok';
+      const musyrifAsrama = assignedMusyrif?.asrama || 'Musyrif PPTQ Batuan';
 
       const msg = formatMusyrifReportMessage({
         musyrifName: musyrifNama,
@@ -664,7 +665,7 @@ export default function SantriPage() {
                 approvedFeedList.map((lap) => {
                   const authorInfo = allUsers.find((u) => u.id === lap.userId) || santriList.find((u) => u.nama === lap.userNama);
                   const authorNama = authorInfo?.nama || lap.userNama;
-                  const authorAsrama = authorInfo?.asrama || lap.userAsrama;
+                  const authorKelompok = authorInfo?.kelompokNama;
                   const authorAvatar = authorInfo?.avatarUrl || lap.userAvatar;
 
                   return (
@@ -683,7 +684,11 @@ export default function SantriPage() {
                         <div>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-slate-800">{authorNama}</span>
-                            <span className="text-[10px] text-slate-400">• {authorAsrama}</span>
+                            {authorKelompok && (
+                              <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                                {authorKelompok}
+                              </span>
+                            )}
                             
                             {/* Badge Status Waktu WIB */}
                             {lap.statusWaktu === 'TERLAMBAT' ? (
@@ -1206,10 +1211,16 @@ export default function SantriPage() {
                     Ganti Foto
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 truncate">NIS: {currentSantriUser?.username} • {currentSantriUser?.asrama}</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="text-[10px] font-bold bg-teal-50 text-teal-800 px-2 py-0.5 rounded border border-teal-200">
-                    Pembimbing: {currentSantriUser?.musyrifNama || 'Ust. Abdullah'}
+                <p className="text-xs text-slate-500 font-medium">NIS: {currentSantriUser?.username}</p>
+                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  {currentSantriUser?.kelompokNama && (
+                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded-md border border-indigo-200 flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-indigo-600" />
+                      <span>{currentSantriUser.kelompokNama}</span>
+                    </span>
+                  )}
+                  <span className="text-[10px] font-bold bg-teal-50 text-teal-800 px-2 py-0.5 rounded-md border border-teal-200">
+                    Musyrif PJ: {currentSantriUser?.musyrifNama || 'Ust. Abdullah'}
                   </span>
                 </div>
               </div>
@@ -1234,7 +1245,7 @@ export default function SantriPage() {
                   <Trophy className="w-5 h-5 text-amber-500" />
                   <span>#{currentSantriUser?.peringkat || 1}</span>
                 </div>
-                <div className="text-[10px] text-teal-600 mt-0.5">Dari {santriList.length} Santri di Halaqoh</div>
+                <div className="text-[10px] text-teal-600 mt-0.5">Dari {santriList.length} Santri Terdaftar</div>
               </div>
             </div>
 

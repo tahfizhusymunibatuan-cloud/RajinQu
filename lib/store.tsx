@@ -6,10 +6,12 @@ import {
   MOCK_USERS,
   MOCK_KEGIATAN,
   MOCK_PERIODE_LIST,
+  MOCK_KELOMPOK,
   MockLaporan,
   MockUser,
   MockKegiatan,
   MockPeriodeLiburan,
+  MockKelompok,
 } from './mock-data';
 import { notifyMusyrifNewReport, notifySantriReportStatus, sendDailyReminderToSantri } from './whatsapp';
 import { getWIBTimeString, checkWaktuKegiatan } from './time-wib';
@@ -22,6 +24,7 @@ interface StoreContextType {
   pengawasList: MockUser[];
   kegiatanList: MockKegiatan[];
   periodeList: MockPeriodeLiburan[];
+  kelompokList: MockKelompok[];
   activePeriode: MockPeriodeLiburan | undefined;
   addLaporan: (newLaporan: Omit<MockLaporan, 'id' | 'createdAt' | 'likesCount' | 'isLikedByUser' | 'comments' | 'status' | 'statusWaktu' | 'waktuLaporWIB'>) => Promise<MockLaporan>;
   approveLaporan: (laporanId: string, catatanPengurus?: string, customPoin?: number) => void;
@@ -31,7 +34,7 @@ interface StoreContextType {
   broadcastReminder: (santriId: string) => Promise<{ success: boolean; message: string }>;
   addMusyrif: (data: { nama: string; username: string; noHp: string; password: string; asrama: string }) => void;
   addPengawas: (data: { nama: string; username: string; noHp: string; password: string; asrama?: string }) => void;
-  addSantri: (data: { nama: string; username: string; noHp: string; password: string; asrama: string; musyrifId: string }) => void;
+  addSantri: (data: { nama: string; username: string; noHp: string; password: string; asrama: string; musyrifId?: string; kelompokId?: string }) => void;
   updateSantriMusyrif: (santriId: string, musyrifId: string) => void;
   updateUser: (userId: string, data: Partial<MockUser>) => void;
   deleteUser: (userId: string) => void;
@@ -44,6 +47,11 @@ interface StoreContextType {
   updatePeriode: (id: string, data: Partial<MockPeriodeLiburan>) => void;
   togglePeriodeActive: (id: string) => void;
   deletePeriode: (id: string) => void;
+  addKelompok: (data: { nama: string; deskripsi?: string; musyrifId: string; santriIds?: string[]; kategoriGender?: 'PUTRA' | 'PUTRI' | 'CAMPUR' }) => void;
+  updateKelompok: (id: string, data: Partial<MockKelompok>) => void;
+  deleteKelompok: (id: string) => void;
+  assignSantriToKelompok: (santriId: string, kelompokId: string) => void;
+  removeSantriFromKelompok: (santriId: string) => void;
   resetDemoData: () => void;
 }
 
@@ -54,14 +62,45 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [allUsers, setAllUsers] = useState<MockUser[]>(MOCK_USERS);
   const [kegiatanList, setKegiatanList] = useState<MockKegiatan[]>(MOCK_KEGIATAN);
   const [periodeList, setPeriodeList] = useState<MockPeriodeLiburan[]>(MOCK_PERIODE_LIST);
+  const [kelompokList, setKelompokList] = useState<MockKelompok[]>(MOCK_KELOMPOK);
 
   useEffect(() => {
+    // Reset/Wipe old demo data once for production transition
+    const isCleanV1 = localStorage.getItem('rajinqu_clean_v1');
+    if (!isCleanV1) {
+      localStorage.removeItem('rajinqu_users');
+      localStorage.removeItem('rajinqu_laporan');
+      localStorage.removeItem('rajinqu_kelompok');
+      localStorage.removeItem('rajinqu_session');
+      localStorage.setItem('rajinqu_clean_v1', 'true');
+      setAllUsers(MOCK_USERS);
+      setKelompokList(MOCK_KELOMPOK);
+      setLaporanList(MOCK_LAPORAN);
+      setKegiatanList(MOCK_KEGIATAN);
+      setPeriodeList(MOCK_PERIODE_LIST);
+      return;
+    }
+
     let currentUsersList = MOCK_USERS;
     const savedUsers = localStorage.getItem('rajinqu_users');
     if (savedUsers) {
       try {
-        currentUsersList = JSON.parse(savedUsers);
+        const parsedUsers: MockUser[] = JSON.parse(savedUsers);
+        currentUsersList = parsedUsers.map((u) => ({
+          ...u,
+          asrama: u.role === 'SANTRI' ? '' : (u.asrama ? u.asrama.replace(/\s*\/\s*Halaqoh.*/i, '').replace(/Musyrif.*Halaqoh.*/i, 'Musyrif PPTQ Batuan').trim() : u.asrama),
+        }));
         setAllUsers(currentUsersList);
+        localStorage.setItem('rajinqu_users', JSON.stringify(currentUsersList));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const savedKelompok = localStorage.getItem('rajinqu_kelompok');
+    if (savedKelompok) {
+      try {
+        setKelompokList(JSON.parse(savedKelompok));
       } catch (e) {
         console.error(e);
       }
@@ -74,15 +113,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // Sinkronisasi userAsrama & userNama laporan dengan data user terbaru
         const syncedLaporans = rawLaporans.map((lap) => {
           const userObj = currentUsersList.find((u) => u.id === lap.userId || u.nama === lap.userNama);
-          if (userObj && userObj.asrama) {
-            return {
-              ...lap,
-              userNama: userObj.nama,
-              userAsrama: userObj.asrama,
-              userAvatar: userObj.avatarUrl || lap.userAvatar,
-            };
-          }
-          return lap;
+          return {
+            ...lap,
+            userNama: userObj?.nama || lap.userNama,
+            userAsrama: '',
+            userAvatar: userObj?.avatarUrl || lap.userAvatar,
+          };
         });
         setLaporanList(syncedLaporans);
         localStorage.setItem('rajinqu_laporan', JSON.stringify(syncedLaporans));
@@ -117,6 +153,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, []);
+
+  const saveKelompok = (list: MockKelompok[]) => {
+    setKelompokList(list);
+    localStorage.setItem('rajinqu_kelompok', JSON.stringify(list));
+  };
 
   const savePeriode = (list: MockPeriodeLiburan[]) => {
     setPeriodeList(list);
@@ -176,26 +217,67 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     saveUsers([...allUsers, newMusyrif]);
   };
 
-  const addSantri = (data: { nama: string; username: string; noHp: string; password: string; asrama: string; musyrifId: string }) => {
-    const selectedMusyrif = allUsers.find((u) => u.id === data.musyrifId);
+  const addSantri = (data: {
+    nama: string;
+    username: string;
+    noHp: string;
+    password: string;
+    asrama: string;
+    musyrifId?: string;
+    kelompokId?: string;
+  }) => {
+    let finalMusyrifId = data.musyrifId || '';
+    let finalMusyrifNama = 'Belum Ditugaskan';
+    let finalKelompokId = data.kelompokId || undefined;
+    let finalKelompokNama: string | undefined = undefined;
 
+    if (data.kelompokId) {
+      const kel = kelompokList.find((k) => k.id === data.kelompokId);
+      if (kel) {
+        finalKelompokNama = kel.nama;
+        finalMusyrifId = kel.musyrifId;
+        finalMusyrifNama = kel.musyrifNama;
+      }
+    } else if (data.musyrifId) {
+      const selectedMusyrif = allUsers.find((u) => u.id === data.musyrifId);
+      if (selectedMusyrif) {
+        finalMusyrifNama = selectedMusyrif.nama;
+      }
+    }
+
+    const newSantriId = `user-santri-${Date.now()}`;
     const newSantri: MockUser = {
-      id: `user-santri-${Date.now()}`,
+      id: newSantriId,
       username: data.username.trim(),
       noHp: data.noHp.trim(),
       password: data.password.trim(),
       nama: data.nama.trim(),
       role: 'SANTRI',
       avatarUrl: `https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80`,
-      pondokNama: 'Pondok Pesantren Al-Hikmah Modern',
-      musyrifId: data.musyrifId,
-      musyrifNama: selectedMusyrif ? selectedMusyrif.nama : 'Belum Ditugaskan',
+      pondokNama: 'PTQA BATUAN',
+      musyrifId: finalMusyrifId,
+      musyrifNama: finalMusyrifNama,
+      kelompokId: finalKelompokId,
+      kelompokNama: finalKelompokNama,
       asrama: data.asrama,
       totalPoin: 0,
       peringkat: santriList.length + 1,
       selisihPeringkat: 0,
     };
     saveUsers([...allUsers, newSantri]);
+
+    if (finalKelompokId) {
+      const updatedKelompokList = kelompokList.map((k) => {
+        if (k.id === finalKelompokId) {
+          return {
+            ...k,
+            santriIds: Array.from(new Set([...k.santriIds, newSantriId])),
+          };
+        }
+        return k;
+      });
+      saveKelompok(updatedKelompokList);
+    }
   };
 
   const updateSantriMusyrif = (santriId: string, musyrifId: string) => {
@@ -211,6 +293,161 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return u;
     });
     saveUsers(updated);
+  };
+
+  const addKelompok = (data: {
+    nama: string;
+    deskripsi?: string;
+    musyrifId: string;
+    santriIds?: string[];
+    kategoriGender?: 'PUTRA' | 'PUTRI' | 'CAMPUR';
+  }) => {
+    const newId = `kelompok-${Date.now()}`;
+    const pjMusyrif = allUsers.find((u) => u.id === data.musyrifId);
+    const musyrifNama = pjMusyrif ? pjMusyrif.nama : 'Belum Ditentukan';
+    const santriIds = data.santriIds || [];
+
+    const newKelompok: MockKelompok = {
+      id: newId,
+      nama: data.nama.trim(),
+      deskripsi: data.deskripsi?.trim() || '',
+      musyrifId: data.musyrifId,
+      musyrifNama: musyrifNama,
+      santriIds: santriIds,
+      kategoriGender: data.kategoriGender || 'CAMPUR',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    const updatedKelompokList = [...kelompokList, newKelompok];
+    saveKelompok(updatedKelompokList);
+
+    // Sinkronisasi data santri yang terpilih
+    if (santriIds.length > 0) {
+      const updatedUsers = allUsers.map((u) => {
+        if (santriIds.includes(u.id)) {
+          return {
+            ...u,
+            kelompokId: newId,
+            kelompokNama: newKelompok.nama,
+            musyrifId: data.musyrifId,
+            musyrifNama: musyrifNama,
+          };
+        }
+        return u;
+      });
+      saveUsers(updatedUsers);
+    }
+  };
+
+  const updateKelompok = (id: string, data: Partial<MockKelompok>) => {
+    const currentKel = kelompokList.find((k) => k.id === id);
+    if (!currentKel) return;
+
+    let newMusyrifNama = currentKel.musyrifNama;
+    if (data.musyrifId && data.musyrifId !== currentKel.musyrifId) {
+      const targetM = allUsers.find((u) => u.id === data.musyrifId);
+      newMusyrifNama = targetM ? targetM.nama : currentKel.musyrifNama;
+    }
+
+    const updatedKelompok: MockKelompok = {
+      ...currentKel,
+      ...data,
+      musyrifNama: newMusyrifNama,
+    };
+
+    const updatedList = kelompokList.map((k) => (k.id === id ? updatedKelompok : k));
+    saveKelompok(updatedList);
+
+    const finalSantriIds = data.santriIds !== undefined ? data.santriIds : currentKel.santriIds;
+    const finalMusyrifId = data.musyrifId !== undefined ? data.musyrifId : currentKel.musyrifId;
+
+    const updatedUsers = allUsers.map((u) => {
+      if (finalSantriIds.includes(u.id)) {
+        return {
+          ...u,
+          kelompokId: id,
+          kelompokNama: updatedKelompok.nama,
+          musyrifId: finalMusyrifId,
+          musyrifNama: newMusyrifNama,
+        };
+      }
+      if (u.kelompokId === id && !finalSantriIds.includes(u.id)) {
+        return {
+          ...u,
+          kelompokId: undefined,
+          kelompokNama: undefined,
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedUsers);
+  };
+
+  const deleteKelompok = (id: string) => {
+    const updatedList = kelompokList.filter((k) => k.id !== id);
+    saveKelompok(updatedList);
+
+    const updatedUsers = allUsers.map((u) => {
+      if (u.kelompokId === id) {
+        return {
+          ...u,
+          kelompokId: undefined,
+          kelompokNama: undefined,
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedUsers);
+  };
+
+  const assignSantriToKelompok = (santriId: string, kelompokId: string) => {
+    const targetKel = kelompokList.find((k) => k.id === kelompokId);
+    if (!targetKel) return;
+
+    const updatedKelompokList = kelompokList.map((k) => {
+      if (k.id === kelompokId) {
+        const existingIds = k.santriIds.filter((sid) => sid !== santriId);
+        return { ...k, santriIds: [...existingIds, santriId] };
+      } else {
+        return { ...k, santriIds: k.santriIds.filter((sid) => sid !== santriId) };
+      }
+    });
+    saveKelompok(updatedKelompokList);
+
+    const pjMusyrif = allUsers.find((u) => u.id === targetKel.musyrifId);
+    const updatedUsers = allUsers.map((u) => {
+      if (u.id === santriId) {
+        return {
+          ...u,
+          kelompokId: targetKel.id,
+          kelompokNama: targetKel.nama,
+          musyrifId: targetKel.musyrifId,
+          musyrifNama: pjMusyrif ? pjMusyrif.nama : u.musyrifNama,
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedUsers);
+  };
+
+  const removeSantriFromKelompok = (santriId: string) => {
+    const updatedKelompokList = kelompokList.map((k) => ({
+      ...k,
+      santriIds: k.santriIds.filter((sid) => sid !== santriId),
+    }));
+    saveKelompok(updatedKelompokList);
+
+    const updatedUsers = allUsers.map((u) => {
+      if (u.id === santriId) {
+        return {
+          ...u,
+          kelompokId: undefined,
+          kelompokNama: undefined,
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedUsers);
   };
 
   const updateUser = (userId: string, data: Partial<MockUser>) => {
@@ -583,10 +820,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setAllUsers(MOCK_USERS);
     setKegiatanList(MOCK_KEGIATAN);
     setPeriodeList(MOCK_PERIODE_LIST);
+    setKelompokList(MOCK_KELOMPOK);
     localStorage.removeItem('rajinqu_laporan');
     localStorage.removeItem('rajinqu_users');
     localStorage.removeItem('rajinqu_kegiatan');
     localStorage.removeItem('rajinqu_periode');
+    localStorage.removeItem('rajinqu_kelompok');
   };
 
   return (
@@ -599,6 +838,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         pengawasList,
         kegiatanList,
         periodeList,
+        kelompokList,
         activePeriode,
         addLaporan,
         approveLaporan,
@@ -621,6 +861,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updatePeriode,
         togglePeriodeActive,
         deletePeriode,
+        addKelompok,
+        updateKelompok,
+        deleteKelompok,
+        assignSantriToKelompok,
+        removeSantriFromKelompok,
         resetDemoData,
       }}
     >

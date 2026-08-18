@@ -30,8 +30,13 @@ import {
   AlertCircle,
   Clock,
   Search,
+  Layers,
+  FolderTree,
+  ArrowRightLeft,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { MOCK_REWARD_PERIODE, MockKegiatan } from '@/lib/mock-data';
+import { MOCK_REWARD_PERIODE, MockKegiatan, MockKelompok } from '@/lib/mock-data';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -43,6 +48,7 @@ export default function AdminPage() {
     musyrifList,
     pengawasList,
     laporanList,
+    kelompokList,
     addMusyrif,
     addPengawas,
     addSantri,
@@ -59,14 +65,49 @@ export default function AdminPage() {
     updatePeriode,
     togglePeriodeActive,
     deletePeriode,
+    addKelompok,
+    updateKelompok,
+    deleteKelompok,
+    assignSantriToKelompok,
+    removeSantriFromKelompok,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'kegiatan' | 'musyrif' | 'santri' | 'periode'>('santri');
+  const [activeTab, setActiveTab] = useState<'kegiatan' | 'santri' | 'periode' | 'kelompok'>('santri');
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'SANTRI' | 'MUSYRIF' | 'PENGAWAS' | 'SUPER_ADMIN'>('ALL');
   const [userSearchQuery, setUserSearchQuery] = useState<string>('');
   const [editableKegiatan, setEditableKegiatan] = useState<MockKegiatan[]>(kegiatanList);
   const [targetPoinReward, setTargetPoinReward] = useState(MOCK_REWARD_PERIODE.targetPoin);
   const [savedSuccess, setSavedSuccess] = useState<string | null>(null);
+
+  // Kelompok Search & Filter State
+  const [kelompokSearchQuery, setKelompokSearchQuery] = useState<string>('');
+  const [kelompokGenderFilter, setKelompokGenderFilter] = useState<'ALL' | 'PUTRA' | 'PUTRI' | 'CAMPUR'>('ALL');
+
+  // Modal Tambah Kelompok
+  const [isAddKelompokOpen, setIsAddKelompokOpen] = useState(false);
+  const [kelompokForm, setKelompokForm] = useState({
+    nama: '',
+    deskripsi: '',
+    musyrifId: musyrifList[0]?.id || '',
+    kategoriGender: 'CAMPUR' as 'PUTRA' | 'PUTRI' | 'CAMPUR',
+    santriIds: [] as string[],
+  });
+
+  // Modal Edit Kelompok
+  const [isEditKelompokOpen, setIsEditKelompokOpen] = useState(false);
+  const [editKelompokForm, setEditKelompokForm] = useState({
+    id: '',
+    nama: '',
+    deskripsi: '',
+    musyrifId: '',
+    kategoriGender: 'CAMPUR' as 'PUTRA' | 'PUTRI' | 'CAMPUR',
+    santriIds: [] as string[],
+  });
+
+  // Modal Pindah / Masukkan Santri ke Kelompok
+  const [isMoveSantriModalOpen, setIsMoveSantriModalOpen] = useState(false);
+  const [targetSantriForMove, setTargetSantriForMove] = useState<any>(null);
+  const [targetKelompokSelected, setTargetKelompokSelected] = useState<string>('');
 
   // Modal Tambah Musyrif
   const [isAddMusyrifOpen, setIsAddMusyrifOpen] = useState(false);
@@ -97,6 +138,7 @@ export default function AdminPage() {
     password: '123',
     asrama: 'Kelas 4 TMI / Halaqoh Abu Bakar',
     musyrifId: musyrifList[0]?.id || 'user-musyrif-1',
+    kelompokId: kelompokList[0]?.id || '',
   });
 
   // Modal Sambungkan Santri dari Tab Musyrif
@@ -150,6 +192,7 @@ export default function AdminPage() {
     password: '',
     asrama: '',
     musyrifId: '',
+    kelompokId: '',
   });
 
   // Modal Edit Musyrif
@@ -246,8 +289,67 @@ export default function AdminPage() {
       password: '123',
       asrama: 'Kelas 4 TMI / Asrama Abu Bakar',
       musyrifId: musyrifList[0]?.id || 'user-musyrif-1',
+      kelompokId: kelompokList[0]?.id || '',
     });
-    showNotification('✅ Akun Santri berhasil didaftarkan & disambungkan ke Musyrif!');
+    showNotification('✅ Akun Santri berhasil didaftarkan & disambungkan ke Kelompok / Musyrif!');
+  };
+
+  const handleCreateKelompok = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kelompokForm.nama || !kelompokForm.musyrifId) {
+      alert('Nama Kelompok dan Musyrif Penanggung Jawab wajib diisi.');
+      return;
+    }
+    addKelompok(kelompokForm);
+    setIsAddKelompokOpen(false);
+    setKelompokForm({
+      nama: '',
+      deskripsi: '',
+      musyrifId: musyrifList[0]?.id || '',
+      kategoriGender: 'CAMPUR',
+      santriIds: [],
+    });
+    showNotification(`✅ Kelompok "${kelompokForm.nama}" berhasil dibuat!`);
+  };
+
+  const handleUpdateKelompokSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editKelompokForm.nama || !editKelompokForm.musyrifId) {
+      alert('Nama Kelompok dan Musyrif Penanggung Jawab wajib diisi.');
+      return;
+    }
+    updateKelompok(editKelompokForm.id, {
+      nama: editKelompokForm.nama.trim(),
+      deskripsi: editKelompokForm.deskripsi.trim(),
+      musyrifId: editKelompokForm.musyrifId,
+      kategoriGender: editKelompokForm.kategoriGender,
+      santriIds: editKelompokForm.santriIds,
+    });
+    setIsEditKelompokOpen(false);
+    showNotification(`✅ Kelompok "${editKelompokForm.nama}" berhasil diperbarui!`);
+  };
+
+  const handleDeleteKelompokAction = (kelompok: MockKelompok) => {
+    if (confirm(`Hapus kelompok "${kelompok.nama}"? Santri di dalam kelompok ini akan menjadi tidak memiliki kelompok (status unassigned).`)) {
+      deleteKelompok(kelompok.id);
+      showNotification(`🗑️ Kelompok "${kelompok.nama}" berhasil dihapus.`);
+    }
+  };
+
+  const handleMoveSantriSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetSantriForMove || !targetKelompokSelected) return;
+
+    if (targetKelompokSelected === '__REMOVE__') {
+      removeSantriFromKelompok(targetSantriForMove.id);
+      showNotification(`Santri ${targetSantriForMove.nama} dikeluarkan dari kelompok.`);
+    } else {
+      assignSantriToKelompok(targetSantriForMove.id, targetKelompokSelected);
+      const targetKel = kelompokList.find((k) => k.id === targetKelompokSelected);
+      showNotification(`✅ ${targetSantriForMove.nama} berhasil dimasukkan ke "${targetKel?.nama || 'Kelompok'}"!`);
+    }
+    setIsMoveSantriModalOpen(false);
+    setTargetSantriForMove(null);
   };
 
   const handleAssignMusyrif = (santriId: string, musyrifId: string) => {
@@ -467,8 +569,8 @@ export default function AdminPage() {
 
             {/* List User Cards */}
             <div className="space-y-2.5">
-              {allUsers
-                .filter((u) => {
+              {(() => {
+                const filteredUsers = allUsers.filter((u) => {
                   const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
                   const matchQuery =
                     userSearchQuery === '' ||
@@ -477,8 +579,21 @@ export default function AdminPage() {
                     u.noHp.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
                     (u.asrama && u.asrama.toLowerCase().includes(userSearchQuery.toLowerCase()));
                   return matchRole && matchQuery;
-                })
-                .map((u) => {
+                });
+
+                if (filteredUsers.length === 0) {
+                  return (
+                    <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-1">
+                      <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                      <p className="text-xs font-bold text-slate-700">Belum ada akun pada filter ini.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Klik tombol <strong>+ Santri</strong>, <strong>+ Musyrif</strong>, atau <strong>+ Pengawas</strong> di atas untuk mendaftarkan akun baru.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredUsers.map((u) => {
                   return (
                     <div
                       key={u.id}
@@ -519,13 +634,17 @@ export default function AdminPage() {
                             <div className="text-[10px] text-slate-400 mt-0.5">
                               User: <span className="font-mono font-bold text-slate-700">{u.username}</span> • PIN: <span className="font-mono text-teal-700 font-bold">{u.password}</span> • 📱 {u.noHp}
                             </div>
-                            <div className="text-[10px] text-slate-500 truncate">{u.asrama || u.pondokNama}</div>
+                            {u.role !== 'SANTRI' && (
+                              <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                {u.asrama || u.pondokNama}
+                              </div>
+                            )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {u.role === 'SANTRI' && (
-                            <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                            <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
                               {u.totalPoin} Poin
                             </span>
                           )}
@@ -543,6 +662,7 @@ export default function AdminPage() {
                                   password: u.password,
                                   asrama: u.asrama || '',
                                   musyrifId: u.musyrifId || '',
+                                  kelompokId: u.kelompokId || '',
                                 });
                                 setIsEditSantriOpen(true);
                               } else if (u.role === 'MUSYRIF') {
@@ -594,174 +714,443 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Khusus Santri: Selector Musyrif Pembimbing */}
+                      {/* Khusus Santri: Kelompok & Musyrif PJ info row */}
                       {u.role === 'SANTRI' && (
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl">
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                            <LinkIcon className="w-3.5 h-3.5 text-teal-600" />
-                            <span>Musyrif Pembimbing:</span>
+                        <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="p-1 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200 shrink-0">
+                              <Layers className="w-3.5 h-3.5" />
+                            </span>
+                            <div className="text-xs truncate font-semibold text-slate-800">
+                              {u.kelompokNama ? (
+                                <>
+                                  <span className="font-bold text-indigo-950">{u.kelompokNama}</span>
+                                  <span className="text-[11px] text-slate-500 ml-1 font-normal">
+                                    (PJ: {u.musyrifNama || 'Musyrif'})
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-normal italic">Belum Ada Kelompok</span>
+                              )}
+                            </div>
                           </div>
 
                           <select
-                            value={u.musyrifId || ''}
-                            onChange={(e) => handleAssignMusyrif(u.id, e.target.value)}
-                            className="text-xs py-1 px-2 bg-white border border-teal-300 rounded-lg text-teal-900 font-bold focus:ring-1 focus:ring-teal-500 shadow-xs"
+                            value={u.kelompokId || ''}
+                            onChange={(e) => {
+                              const newKelId = e.target.value;
+                              if (!newKelId) {
+                                removeSantriFromKelompok(u.id);
+                                showNotification(`${u.nama} dikeluarkan dari kelompok.`);
+                              } else {
+                                assignSantriToKelompok(u.id, newKelId);
+                                const targetKel = kelompokList.find((k) => k.id === newKelId);
+                                showNotification(`✅ ${u.nama} masuk ke ${targetKel?.nama || 'Kelompok'}`);
+                              }
+                            }}
+                            className="text-xs py-1 px-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-bold focus:ring-1 focus:ring-indigo-500 cursor-pointer shrink-0"
                           >
-                            <option value="" disabled>Pilih Musyrif</option>
-                            {musyrifList.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.nama} ({m.asrama ? m.asrama.split(' ')[1] || 'Musyrif' : 'Musyrif'})
+                            <option value="">{u.kelompokId ? 'Ubah Kelompok...' : 'Pilih Kelompok...'}</option>
+                            {kelompokList.map((k) => (
+                              <option key={k.id} value={k.id}>
+                                {k.nama} (PJ: {k.musyrifNama})
                               </option>
                             ))}
+                            {u.kelompokId && (
+                              <option value="">❌ Keluarkan dari Kelompok</option>
+                            )}
                           </select>
                         </div>
                       )}
                     </div>
                   );
-                })}
+                });
+              })()}
             </div>
           </div>
         )}
 
         {/* ================================================================= */}
-        {/* TAB 2: DATA MUSYRIF / PENGURUS & SANTRI BINAAN */}
+        {/* TAB 1.5: MANAJEMEN KELOMPOK / HALAQAH SANTRI & MUSYRIF PJ */}
         {/* ================================================================= */}
-        {activeTab === 'musyrif' && (
-          <div className="space-y-3">
+        {activeTab === 'kelompok' && (
+          <div className="space-y-4">
+            {/* Header Manajemen Kelompok */}
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Daftar Musyrif / Pengurus ({musyrifList.length})
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <span>Kelompok & Halaqah ({kelompokList.length})</span>
                 </h3>
-                <p className="text-[10px] text-slate-500">Penanggung jawab validasi & reminder santri</p>
+                <p className="text-[10px] text-slate-500">
+                  Pembagian santri dengan Musyrif sebagai Penanggung Jawab
+                </p>
               </div>
               <button
-                onClick={() => setIsAddMusyrifOpen(true)}
-                className="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm transition"
+                onClick={() => {
+                  setKelompokForm({
+                    nama: '',
+                    deskripsi: '',
+                    musyrifId: musyrifList[0]?.id || '',
+                    kategoriGender: 'CAMPUR',
+                    santriIds: [],
+                  });
+                  setIsAddKelompokOpen(true);
+                }}
+                className="inline-flex items-center gap-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Musyrif</span>
+                <span>Tambah Kelompok</span>
               </button>
             </div>
 
-            <div className="space-y-2.5">
-              {musyrifList.map((musyrif) => {
-                const binaan = santriList.filter((s) => s.musyrifId === musyrif.id || s.musyrifNama === musyrif.nama);
-
-                return (
-                  <div
-                    key={musyrif.id}
-                    className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm space-y-2.5"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={musyrif.avatarUrl}
-                          alt={musyrif.nama}
-                          className="w-10 h-10 rounded-full object-cover border border-amber-400 shrink-0"
-                        />
-                        <div>
-                          <div className="text-xs font-bold text-slate-800">{musyrif.nama}</div>
-                          <div className="text-[10px] text-slate-400">
-                            Username: <span className="font-mono font-bold text-slate-600">{musyrif.username}</span> • PIN: <span className="font-mono font-bold text-slate-600">{musyrif.password}</span>
-                          </div>
-                          <div className="text-[10px] text-amber-700 font-semibold">{musyrif.asrama}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                          {binaan.length} Santri Binaan
-                        </span>
-
-                        {/* Tombol Edit Musyrif */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditMusyrifForm({
-                              id: musyrif.id,
-                              nama: musyrif.nama,
-                              username: musyrif.username,
-                              noHp: musyrif.noHp,
-                              password: musyrif.password,
-                              asrama: musyrif.asrama || '',
-                            });
-                            setIsEditMusyrifOpen(true);
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-100 text-slate-500 hover:text-amber-800 transition"
-                          title="Edit Data Musyrif"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Tombol Hapus Musyrif */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Hapus data akun musyrif "${musyrif.nama}"?`)) {
-                              deleteUser(musyrif.id);
-                              showNotification(`🗑️ Akun musyrif ${musyrif.nama} berhasil dihapus.`);
-                            }
-                          }}
-                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition"
-                          title="Hapus Musyrif"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* List Santri Binaan yang diasuh */}
-                    <div className="bg-slate-50 p-2.5 rounded-xl text-xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
-                          Santri yang Dipertanggungjawabkan:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedMusyrifForAssign(musyrif);
-                            setIsAssignModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100/80 hover:bg-amber-200 px-2 py-0.5 rounded-lg border border-amber-300 transition"
-                        >
-                          <LinkIcon className="w-3 h-3 text-amber-700" />
-                          <span>+ Hubungkan Santri</span>
-                        </button>
-                      </div>
-
-                      {binaan.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 italic py-1">Belum ada santri yang ditugaskan ke Musyrif ini. Klik tombol "+ Hubungkan Santri" di atas.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5 pt-0.5">
-                          {binaan.map((b) => (
-                            <span
-                              key={b.id}
-                              className="text-[10px] bg-white border border-slate-200 text-slate-700 pl-2 pr-1 py-0.5 rounded-lg shadow-2xs font-medium flex items-center gap-1.5"
-                            >
-                              <span>👤 {b.nama}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleAssignMusyrif(b.id, '')}
-                                title="Lepas santri dari musyrif ini"
-                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center text-[9px] font-bold"
-                              >
-                                ✕
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            {/* Stats Summary Kelompok */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-indigo-50 border border-indigo-100 p-2.5 rounded-2xl">
+                <span className="text-[10px] font-bold text-indigo-600 block">Total Kelompok</span>
+                <span className="text-lg font-black text-indigo-950">{kelompokList.length}</span>
+              </div>
+              <div className="bg-teal-50 border border-teal-100 p-2.5 rounded-2xl">
+                <span className="text-[10px] font-bold text-teal-600 block">Santri Terbagi</span>
+                <span className="text-lg font-black text-teal-950">
+                  {santriList.filter((s) => s.kelompokId).length} / {santriList.length}
+                </span>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 p-2.5 rounded-2xl">
+                <span className="text-[10px] font-bold text-amber-700 block">Belum Ada Kelompok</span>
+                <span className="text-lg font-black text-amber-950">
+                  {santriList.filter((s) => !s.kelompokId).length}
+                </span>
+              </div>
+              <div className="bg-purple-50 border border-purple-100 p-2.5 rounded-2xl">
+                <span className="text-[10px] font-bold text-purple-700 block">Musyrif PJ Aktif</span>
+                <span className="text-lg font-black text-purple-950">
+                  {new Set(kelompokList.map((k) => k.musyrifId)).size} Musyrif
+                </span>
+              </div>
             </div>
+
+            {/* Search & Kategori Filter Toolbar */}
+            <div className="space-y-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Cari nama kelompok, musyrif PJ, atau santri..."
+                  value={kelompokSearchQuery}
+                  onChange={(e) => setKelompokSearchQuery(e.target.value)}
+                  className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="flex gap-1 overflow-x-auto pb-0.5 text-[11px] font-bold">
+                {(['ALL', 'PUTRA', 'PUTRI', 'CAMPUR'] as const).map((gender) => (
+                  <button
+                    key={gender}
+                    type="button"
+                    onClick={() => setKelompokGenderFilter(gender)}
+                    className={`px-3 py-1 rounded-xl shrink-0 transition ${
+                      kelompokGenderFilter === gender
+                        ? 'bg-indigo-700 text-white shadow-2xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {gender === 'ALL' && `Semua (${kelompokList.length})`}
+                    {gender === 'PUTRA' && `Putra (${kelompokList.filter((k) => k.kategoriGender === 'PUTRA').length})`}
+                    {gender === 'PUTRI' && `Putri (${kelompokList.filter((k) => k.kategoriGender === 'PUTRI').length})`}
+                    {gender === 'CAMPUR' && `Campur (${kelompokList.filter((k) => k.kategoriGender === 'CAMPUR').length})`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* List of Kelompok Cards */}
+            <div className="space-y-3">
+              {(() => {
+                const filteredKelompok = kelompokList
+                  .filter((k) => {
+                    if (kelompokGenderFilter !== 'ALL' && k.kategoriGender !== kelompokGenderFilter) return false;
+                    if (!kelompokSearchQuery) return true;
+                    const query = kelompokSearchQuery.toLowerCase();
+                    const matchName = k.nama.toLowerCase().includes(query);
+                    const matchMusyrif = k.musyrifNama.toLowerCase().includes(query);
+                    const matchSantri = santriList
+                      .filter((s) => k.santriIds.includes(s.id) || s.kelompokId === k.id)
+                      .some((s) => s.nama.toLowerCase().includes(query));
+                    return matchName || matchMusyrif || matchSantri;
+                  });
+
+                if (filteredKelompok.length === 0) {
+                  return (
+                    <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-1">
+                      <Layers className="w-10 h-10 mx-auto mb-2 text-indigo-300" />
+                      <p className="text-xs font-bold text-slate-700">Belum ada kelompok yang dibuat.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Klik tombol <strong>+ Buat Kelompok</strong> di atas untuk membuat kelompok halaqah santri.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredKelompok.map((kelompok) => {
+                  const anggotaSantri = santriList.filter(
+                    (s) => kelompok.santriIds.includes(s.id) || s.kelompokId === kelompok.id
+                  );
+                  const totalPoinKelompok = anggotaSantri.reduce((acc, s) => acc + (s.totalPoin || 0), 0);
+                  const avgPoin = anggotaSantri.length > 0 ? Math.round(totalPoinKelompok / anggotaSantri.length) : 0;
+                  const pjMusyrif = allUsers.find((u) => u.id === kelompok.musyrifId);
+
+                  return (
+                    <div
+                      key={kelompok.id}
+                      className="bg-white border border-slate-200/90 rounded-2xl p-3.5 shadow-xs space-y-3 transition hover:border-indigo-200"
+                    >
+                      {/* Top Header of Card */}
+                      <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                                kelompok.kategoriGender === 'PUTRA'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : kelompok.kategoriGender === 'PUTRI'
+                                  ? 'bg-pink-50 text-pink-700 border-pink-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {kelompok.kategoriGender || 'CAMPUR'}
+                            </span>
+                            <h4 className="text-sm font-bold text-slate-900">{kelompok.nama}</h4>
+                          </div>
+                          {kelompok.deskripsi && (
+                            <p className="text-[11px] text-slate-500 mt-0.5">{kelompok.deskripsi}</p>
+                          )}
+                        </div>
+
+                        {/* Actions: Edit & Delete */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditKelompokForm({
+                                id: kelompok.id,
+                                nama: kelompok.nama,
+                                deskripsi: kelompok.deskripsi || '',
+                                musyrifId: kelompok.musyrifId,
+                                kategoriGender: kelompok.kategoriGender || 'CAMPUR',
+                                santriIds: kelompok.santriIds || [],
+                              });
+                              setIsEditKelompokOpen(true);
+                            }}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-500 hover:text-indigo-700 transition"
+                            title="Edit Kelompok"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteKelompokAction(kelompok)}
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition"
+                            title="Hapus Kelompok"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Penanggung Jawab (Musyrif) Banner */}
+                      <div className="bg-amber-50/80 border border-amber-200/80 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={
+                              pjMusyrif?.avatarUrl ||
+                              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
+                            }
+                            alt={kelompok.musyrifNama}
+                            className="w-8 h-8 rounded-full object-cover border border-amber-300 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <span className="text-[9px] font-black uppercase tracking-wider text-amber-800 block">
+                              Musyrif Penanggung Jawab
+                            </span>
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {kelompok.musyrifNama}
+                            </p>
+                          </div>
+                        </div>
+
+                        {pjMusyrif?.noHp && (
+                          <a
+                            href={`https://wa.me/${pjMusyrif.noHp.replace(/[^0-9]/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 transition shadow-2xs"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>WhatsApp</span>
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Stats Row */}
+                      <div className="grid grid-cols-3 gap-1.5 text-center bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-bold block">Anggota</span>
+                          <span className="text-xs font-black text-slate-800">{anggotaSantri.length} Santri</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-bold block">Total Poin</span>
+                          <span className="text-xs font-black text-teal-700">{totalPoinKelompok} Poin</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-500 font-bold block">Rata-rata</span>
+                          <span className="text-xs font-black text-indigo-700">{avgPoin} Poin/Santri</span>
+                        </div>
+                      </div>
+
+                      {/* Santri Members List */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                          <span>Daftar Santri Anggota ({anggotaSantri.length}):</span>
+                        </div>
+
+                        {anggotaSantri.length === 0 ? (
+                          <div className="text-center p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-[11px]">
+                            Belum ada santri di dalam kelompok ini.
+                          </div>
+                        ) : (
+                          <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                            {anggotaSantri.map((santri) => (
+                              <div
+                                key={santri.id}
+                                className="flex items-center justify-between p-1.5 bg-slate-50/80 hover:bg-indigo-50/50 border border-slate-100 rounded-xl text-xs transition"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <img
+                                    src={
+                                      santri.avatarUrl ||
+                                      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'
+                                    }
+                                    alt={santri.nama}
+                                    className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
+                                  />
+                                  <div className="min-w-0">
+                                    <span className="font-semibold text-slate-900 truncate block text-[11px]">
+                                      {santri.nama}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400">
+                                      NIS: {santri.username} • {santri.totalPoin} Poin
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTargetSantriForMove(santri);
+                                      setTargetKelompokSelected(kelompok.id);
+                                      setIsMoveSantriModalOpen(true);
+                                    }}
+                                    className="p-1 text-[10px] text-indigo-700 hover:bg-indigo-100 rounded-md font-bold transition flex items-center gap-0.5"
+                                    title="Pindah ke Kelompok Lain"
+                                  >
+                                    <ArrowRightLeft className="w-3 h-3" />
+                                    <span>Pindah</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Keluarkan ${santri.nama} dari ${kelompok.nama}?`)) {
+                                        removeSantriFromKelompok(santri.id);
+                                        showNotification(`${santri.nama} dikeluarkan dari kelompok.`);
+                                      }
+                                    }}
+                                    className="p-1 text-[10px] text-rose-600 hover:bg-rose-50 rounded-md font-bold transition"
+                                    title="Keluarkan dari Kelompok"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer: Quick Add Santri Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditKelompokForm({
+                            id: kelompok.id,
+                            nama: kelompok.nama,
+                            deskripsi: kelompok.deskripsi || '',
+                            musyrifId: kelompok.musyrifId,
+                            kategoriGender: kelompok.kategoriGender || 'CAMPUR',
+                            santriIds: kelompok.santriIds || [],
+                          });
+                          setIsEditKelompokOpen(true);
+                        }}
+                        className="w-full py-1.5 text-center text-xs font-bold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-xl transition border border-indigo-200/60 flex items-center justify-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Kelola Anggota Santri</span>
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Unassigned Santri Alert & Drawer */}
+            {santriList.filter((s) => !s.kelompokId).length > 0 && (
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 space-y-2.5">
+                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Santri Belum Masuk Kelompok ({santriList.filter((s) => !s.kelompokId).length})
+                  </span>
+                </div>
+                <p className="text-[10px] text-amber-800">
+                  Santri-santri berikut belum dimasukkan ke dalam kelompok/halaqah manapun. Klik &quot;+ Masukkan&quot; untuk mengalokasikan santri ke kelompok:
+                </p>
+
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {santriList
+                    .filter((s) => !s.kelompokId)
+                    .map((s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between p-1.5 bg-white rounded-xl border border-amber-100 text-xs shadow-2xs"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-800 block truncate text-[11px]">{s.nama}</span>
+                          <span className="text-[9px] text-slate-400">NIS: {s.username} • {s.asrama}</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTargetSantriForMove(s);
+                            setTargetKelompokSelected(kelompokList[0]?.id || '');
+                            setIsMoveSantriModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 transition"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Masukkan Kelompok</span>
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ================================================================= */}
-        {/* TAB 3: MANAJEMEN KEGIATAN (WAJIB / SUNNAH & ATUR POIN) */}
+        {/* TAB: MANAJEMEN KEGIATAN (WAJIB / SUNNAH & ATUR POIN) */}
         {/* ================================================================= */}
         {activeTab === 'kegiatan' && (
           <div className="space-y-3">
@@ -1098,68 +1487,68 @@ export default function AdminPage() {
       {/* ============================================================= */}
       {/* BOTTOM NAVBAR SUPER ADMIN */}
       {/* ============================================================= */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-3 py-2">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 py-2">
         <div className="max-w-md mx-auto grid grid-cols-4 gap-1 text-center">
           <button
             type="button"
             onClick={() => setActiveTab('santri')}
-            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+            className={`py-1.5 px-0.5 rounded-2xl transition flex flex-col items-center gap-0.5 ${
               activeTab === 'santri'
                 ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Users className={`w-4 h-4 ${activeTab === 'santri' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
-            <span className="text-[10px]">Data Santri</span>
+            <span className="text-[9px]">Pengguna</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('musyrif')}
-            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
-              activeTab === 'musyrif'
-                ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
+            onClick={() => setActiveTab('kelompok')}
+            className={`py-1.5 px-0.5 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+              activeTab === 'kelompok'
+                ? 'bg-indigo-50 text-indigo-800 font-extrabold shadow-2xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <UserCheck className={`w-4 h-4 ${activeTab === 'musyrif' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
-            <span className="text-[10px]">Data Musyrif</span>
+            <Layers className={`w-4 h-4 ${activeTab === 'kelompok' ? 'text-indigo-700 stroke-[2.5]' : ''}`} />
+            <span className="text-[9px]">Kelompok</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('kegiatan')}
-            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+            className={`py-1.5 px-0.5 rounded-2xl transition flex flex-col items-center gap-0.5 ${
               activeTab === 'kegiatan'
                 ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Sparkles className={`w-4 h-4 ${activeTab === 'kegiatan' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
-            <span className="text-[10px]">Bobot Poin</span>
+            <span className="text-[9px]">Bobot</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('periode')}
-            className={`py-1.5 px-1 rounded-2xl transition flex flex-col items-center gap-0.5 ${
+            className={`py-1.5 px-0.5 rounded-2xl transition flex flex-col items-center gap-0.5 ${
               activeTab === 'periode'
                 ? 'bg-teal-50 text-teal-800 font-extrabold shadow-2xs'
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Award className={`w-4 h-4 ${activeTab === 'periode' ? 'text-teal-700 stroke-[2.5]' : ''}`} />
-            <span className="text-[10px]">Periode Reward</span>
+            <span className="text-[9px]">Reward</span>
           </button>
         </div>
       </nav>
 
       {/* ================================================================= */}
-      {/* MODAL TAMBAH SANTRI & SAMBUNGKAN KE MUSYRIF */}
+      {/* MODAL TAMBAH SANTRI & SAMBUNGKAN KE KELOMPOK / MUSYRIF */}
       {/* ================================================================= */}
       {isAddSantriOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-2">
               <div className="flex items-center gap-2 text-teal-800 font-bold text-sm">
                 <GraduationCap className="w-5 h-5 text-teal-600" />
@@ -1222,31 +1611,29 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Kelas & Halaqoh</label>
-                <input
-                  type="text"
-                  placeholder="Kelas 3 TMI / Halaqoh Abu Bakar"
-                  value={santriForm.asrama}
-                  onChange={(e) => setSantriForm({ ...santriForm, asrama: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-
-              {/* DROPDOWN KAITKAN KE MUSYRIF */}
-              <div className="bg-teal-50 p-2.5 rounded-xl border border-teal-200">
-                <label className="block font-bold text-teal-900 mb-1 flex items-center gap-1">
-                  <LinkIcon className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Kaitkan ke Musyrif Penanggung Jawab</span>
+              {/* DROPDOWN KAITKAN KE KELOMPOK */}
+              <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
+                <label className="block font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Masukkan ke Kelompok / Halaqah</span>
                 </label>
                 <select
-                  value={santriForm.musyrifId}
-                  onChange={(e) => setSantriForm({ ...santriForm, musyrifId: e.target.value })}
-                  className="w-full p-2 bg-white border border-teal-300 rounded-xl text-teal-950 font-bold focus:ring-2 focus:ring-teal-500"
+                  value={santriForm.kelompokId || ''}
+                  onChange={(e) => {
+                    const chosenKelId = e.target.value;
+                    const chosenKel = kelompokList.find((k) => k.id === chosenKelId);
+                    setSantriForm({
+                      ...santriForm,
+                      kelompokId: chosenKelId,
+                      musyrifId: chosenKel ? chosenKel.musyrifId : santriForm.musyrifId,
+                    });
+                  }}
+                  className="w-full p-2 bg-white border border-indigo-300 rounded-xl text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500"
                 >
-                  {musyrifList.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.nama} ({m.asrama || 'Musyrif'})
+                  <option value="">-- Tanpa Kelompok --</option>
+                  {kelompokList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama} (PJ: {k.musyrifNama})
                     </option>
                   ))}
                 </select>
@@ -1256,7 +1643,7 @@ export default function AdminPage() {
                 type="submit"
                 className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl shadow mt-2"
               >
-                Simpan & Sambungkan Santri
+                Simpan & Tambah Santri
               </button>
             </form>
           </div>
@@ -1264,15 +1651,15 @@ export default function AdminPage() {
       )}
 
       {/* ================================================================= */}
-      {/* MODAL TAMBAH MUSYRIF */}
+      {/* MODAL TAMBAH MUSYRIF BARU */}
       {/* ================================================================= */}
       {isAddMusyrifOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
           <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2 text-amber-900 font-bold text-sm">
-                <UserCheck className="w-5 h-5 text-amber-600" />
-                <span>Buat Akun Musyrif Baru</span>
+              <div className="flex items-center gap-2 text-teal-900 font-bold text-sm">
+                <UserCheck className="w-4 h-4 text-teal-700" />
+                <span>Tambah Musyrif / Pembina Baru</span>
               </div>
               <button
                 onClick={() => setIsAddMusyrifOpen(false)}
@@ -1291,7 +1678,7 @@ export default function AdminPage() {
                   placeholder="Contoh: Ustadz Ahmad Zulfikar, S.Pd."
                   value={musyrifForm.nama}
                   onChange={(e) => setMusyrifForm({ ...musyrifForm, nama: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
                 />
               </div>
 
@@ -1301,7 +1688,7 @@ export default function AdminPage() {
                   <input
                     type="text"
                     required
-                    placeholder="musyrif.zulfikar"
+                    placeholder="musyrif.ahmad"
                     value={musyrifForm.username}
                     onChange={(e) => setMusyrifForm({ ...musyrifForm, username: e.target.value })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
@@ -1312,6 +1699,7 @@ export default function AdminPage() {
                   <input
                     type="text"
                     required
+                    placeholder="123"
                     value={musyrifForm.password}
                     onChange={(e) => setMusyrifForm({ ...musyrifForm, password: e.target.value })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
@@ -1332,10 +1720,10 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tugas / Halaqoh Binaan</label>
+                <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
                 <input
                   type="text"
-                  placeholder="Musyrif Halaqoh Usman Bin Affan"
+                  placeholder="Contoh: Musyrif PPTQ Batuan"
                   value={musyrifForm.asrama}
                   onChange={(e) => setMusyrifForm({ ...musyrifForm, asrama: e.target.value })}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
@@ -1865,6 +2253,11 @@ export default function AdminPage() {
                   asrama: editSantriForm.asrama.trim(),
                   musyrifId: editSantriForm.musyrifId,
                 });
+                if (editSantriForm.kelompokId) {
+                  assignSantriToKelompok(editSantriForm.id, editSantriForm.kelompokId);
+                } else {
+                  removeSantriFromKelompok(editSantriForm.id);
+                }
                 setIsEditSantriOpen(false);
                 showNotification(`✅ Data santri ${editSantriForm.nama} berhasil diperbarui!`);
               }}
@@ -1915,31 +2308,29 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Kelas & Halaqoh</label>
-                <input
-                  type="text"
-                  value={editSantriForm.asrama}
-                  onChange={(e) => setEditSantriForm({ ...editSantriForm, asrama: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-
-              {/* DROPDOWN KAITKAN KE MUSYRIF */}
-              <div className="bg-teal-50 p-2.5 rounded-xl border border-teal-200">
-                <label className="block font-bold text-teal-900 mb-1 flex items-center gap-1">
-                  <LinkIcon className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Musyrif Penanggung Jawab</span>
+              {/* DROPDOWN KAITKAN KE KELOMPOK */}
+              <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
+                <label className="block font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Kelompok / Halaqah</span>
                 </label>
                 <select
-                  value={editSantriForm.musyrifId}
-                  onChange={(e) => setEditSantriForm({ ...editSantriForm, musyrifId: e.target.value })}
-                  className="w-full p-2 bg-white border border-teal-300 rounded-xl text-teal-950 font-bold focus:ring-2 focus:ring-teal-500"
+                  value={editSantriForm.kelompokId || ''}
+                  onChange={(e) => {
+                    const chosenKelId = e.target.value;
+                    const chosenKel = kelompokList.find((k) => k.id === chosenKelId);
+                    setEditSantriForm({
+                      ...editSantriForm,
+                      kelompokId: chosenKelId,
+                      musyrifId: chosenKel ? chosenKel.musyrifId : editSantriForm.musyrifId,
+                    });
+                  }}
+                  className="w-full p-2 bg-white border border-indigo-300 rounded-xl text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">-- Belum Ditugaskan --</option>
-                  {musyrifList.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.nama} ({m.asrama || 'Musyrif'})
+                  <option value="">-- Tanpa Kelompok --</option>
+                  {kelompokList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama} (PJ: {k.musyrifNama})
                     </option>
                   ))}
                 </select>
@@ -2036,9 +2427,10 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tugas / Halaqoh Binaan</label>
+                <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
                 <input
                   type="text"
+                  placeholder="Contoh: Musyrif PPTQ Batuan"
                   value={editMusyrifForm.asrama}
                   onChange={(e) => setEditMusyrifForm({ ...editMusyrifForm, asrama: e.target.value })}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
@@ -2256,6 +2648,353 @@ export default function AdminPage() {
                 className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow mt-2"
               >
                 Simpan Perubahan Periode
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL TAMBAH KELOMPOK / HALAQAH BARU */}
+      {/* ================================================================= */}
+      {isAddKelompokOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                <Layers className="w-5 h-5 text-indigo-600" />
+                <span>Tambah Kelompok / Halaqah Baru</span>
+              </div>
+              <button
+                onClick={() => setIsAddKelompokOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateKelompok} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Kelompok / Halaqah</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Kelompok Ibnu Abbas (Putra)"
+                  value={kelompokForm.nama}
+                  onChange={(e) => setKelompokForm({ ...kelompokForm, nama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Kategori Gender</label>
+                  <select
+                    value={kelompokForm.kategoriGender}
+                    onChange={(e) =>
+                      setKelompokForm({
+                        ...kelompokForm,
+                        kategoriGender: e.target.value as 'PUTRA' | 'PUTRI' | 'CAMPUR',
+                      })
+                    }
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                  >
+                    <option value="PUTRA">PUTRA</option>
+                    <option value="PUTRI">PUTRI</option>
+                    <option value="CAMPUR">CAMPUR</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Musyrif Penanggung Jawab</label>
+                  <select
+                    required
+                    value={kelompokForm.musyrifId}
+                    onChange={(e) => setKelompokForm({ ...kelompokForm, musyrifId: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                  >
+                    <option value="" disabled>Pilih Musyrif PJ</option>
+                    {musyrifList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nama}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Deskripsi / Tingkat / Keterangan</label>
+                <textarea
+                  rows={2}
+                  placeholder="Contoh: Halaqah Tahfidz & Kedisiplinan Ibadah Kelas 4 TMI"
+                  value={kelompokForm.deskripsi}
+                  onChange={(e) => setKelompokForm({ ...kelompokForm, deskripsi: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                ></textarea>
+              </div>
+
+              {/* Checklist Santri yang langsung dimasukkan */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-700">Pilih Santri Anggota Langsung</label>
+                  <span className="text-[10px] text-indigo-700 font-bold">
+                    {kelompokForm.santriIds.length} santri terpilih
+                  </span>
+                </div>
+                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50/50 space-y-1">
+                  {santriList.map((s) => {
+                    const isChecked = kelompokForm.santriIds.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer transition text-[11px] ${
+                          isChecked
+                            ? 'bg-indigo-50 border-indigo-200 font-bold text-indigo-950'
+                            : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setKelompokForm({
+                                  ...kelompokForm,
+                                  santriIds: [...kelompokForm.santriIds, s.id],
+                                });
+                              } else {
+                                setKelompokForm({
+                                  ...kelompokForm,
+                                  santriIds: kelompokForm.santriIds.filter((id) => id !== s.id),
+                                });
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="truncate">{s.nama}</span>
+                        </div>
+                        <span className="text-[9px] text-slate-400 shrink-0">
+                          {s.kelompokNama ? `[${s.kelompokNama}]` : '(Belum ada kelompok)'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl shadow mt-2"
+              >
+                Buat Kelompok Baru
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL EDIT KELOMPOK / HALAQAH */}
+      {/* ================================================================= */}
+      {isEditKelompokOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                <Edit className="w-4 h-4 text-indigo-600" />
+                <span>Edit Kelompok / Halaqah</span>
+              </div>
+              <button
+                onClick={() => setIsEditKelompokOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateKelompokSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Kelompok</label>
+                <input
+                  type="text"
+                  required
+                  value={editKelompokForm.nama}
+                  onChange={(e) => setEditKelompokForm({ ...editKelompokForm, nama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Kategori Gender</label>
+                  <select
+                    value={editKelompokForm.kategoriGender}
+                    onChange={(e) =>
+                      setEditKelompokForm({
+                        ...editKelompokForm,
+                        kategoriGender: e.target.value as 'PUTRA' | 'PUTRI' | 'CAMPUR',
+                      })
+                    }
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                  >
+                    <option value="PUTRA">PUTRA</option>
+                    <option value="PUTRI">PUTRI</option>
+                    <option value="CAMPUR">CAMPUR</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Musyrif Penanggung Jawab</label>
+                  <select
+                    required
+                    value={editKelompokForm.musyrifId}
+                    onChange={(e) => setEditKelompokForm({ ...editKelompokForm, musyrifId: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
+                  >
+                    {musyrifList.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.nama}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Deskripsi / Keterangan</label>
+                <textarea
+                  rows={2}
+                  value={editKelompokForm.deskripsi}
+                  onChange={(e) => setEditKelompokForm({ ...editKelompokForm, deskripsi: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
+                ></textarea>
+              </div>
+
+              {/* Checklist Kelola Anggota Santri */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-semibold text-slate-700">Daftar Anggota Santri</label>
+                  <span className="text-[10px] text-indigo-700 font-bold">
+                    {editKelompokForm.santriIds.length} santri dalam kelompok ini
+                  </span>
+                </div>
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50/50 space-y-1">
+                  {santriList.map((s) => {
+                    const isChecked = editKelompokForm.santriIds.includes(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-center justify-between p-1.5 rounded-lg border cursor-pointer transition text-[11px] ${
+                          isChecked
+                            ? 'bg-indigo-50 border-indigo-200 font-bold text-indigo-950'
+                            : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditKelompokForm({
+                                  ...editKelompokForm,
+                                  santriIds: [...editKelompokForm.santriIds, s.id],
+                                });
+                              } else {
+                                setEditKelompokForm({
+                                  ...editKelompokForm,
+                                  santriIds: editKelompokForm.santriIds.filter((id) => id !== s.id),
+                                });
+                              }
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="truncate">{s.nama}</span>
+                        </div>
+                        <span className="text-[9px] text-slate-400 shrink-0">
+                          {s.kelompokId === editKelompokForm.id
+                            ? 'Anggota'
+                            : s.kelompokNama
+                            ? `Kelompok: ${s.kelompokNama}`
+                            : 'Tanpa kelompok'}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl shadow mt-2"
+              >
+                Simpan Perubahan Kelompok
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL PINDAH / MASUKKAN SANTRI KE KELOMPOK */}
+      {/* ================================================================= */}
+      {isMoveSantriModalOpen && targetSantriForMove && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-indigo-900 font-bold text-sm">
+                <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                <span>Pindahkan Santri ke Kelompok</span>
+              </div>
+              <button
+                onClick={() => setIsMoveSantriModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleMoveSantriSubmit} className="space-y-3 text-xs">
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center gap-2.5">
+                <img
+                  src={
+                    targetSantriForMove.avatarUrl ||
+                    'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'
+                  }
+                  alt={targetSantriForMove.nama}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
+                />
+                <div>
+                  <span className="font-bold text-slate-900 block text-xs">{targetSantriForMove.nama}</span>
+                  <span className="text-[10px] text-slate-500">
+                    Saat ini: {targetSantriForMove.kelompokNama ? targetSantriForMove.kelompokNama : 'Belum Ada Kelompok'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Pilih Kelompok Tujuan</label>
+                <select
+                  value={targetKelompokSelected}
+                  onChange={(e) => setTargetKelompokSelected(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-indigo-300 rounded-xl text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="__REMOVE__">-- Keluarkan dari Kelompok (Hapus Anggota) --</option>
+                  {kelompokList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama} (PJ: {k.musyrifNama})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl shadow mt-2"
+              >
+                Simpan Penempatan Kelompok
               </button>
             </form>
           </div>

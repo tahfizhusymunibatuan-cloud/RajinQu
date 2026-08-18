@@ -76,6 +76,7 @@ export default function PengurusPage() {
     allUsers,
     santriList,
     kegiatanList,
+    kelompokList,
     approveLaporan,
     rejectLaporan,
     broadcastReminder,
@@ -648,6 +649,32 @@ export default function PengurusPage() {
               </div>
             </div>
 
+            {/* Kelompok / Halaqah Binaan Info Banner */}
+            {(() => {
+              const myKelompokList = kelompokList.filter((k) => k.musyrifId === user?.id || k.musyrifNama === user?.nama);
+              if (myKelompokList.length === 0) return null;
+              return (
+                <div className="bg-indigo-50 border border-indigo-200/80 rounded-2xl p-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-indigo-600 block uppercase tracking-wider">
+                        Halaqah / Kelompok Binaan
+                      </span>
+                      <span className="text-xs font-black text-indigo-950">
+                        {myKelompokList.map((k) => k.nama).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 px-2.5 py-1 rounded-xl shrink-0">
+                    {displaySantri.length} Santri
+                  </span>
+                </div>
+              );
+            })()}
+
             {/* List Santri Binaan dengan Rincian Checklist */}
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1 text-xs font-bold text-slate-700">
@@ -691,8 +718,15 @@ export default function PengurusPage() {
                             className="w-10 h-10 rounded-full object-cover border border-slate-200"
                           />
                           <div>
-                            <div className="text-xs font-bold text-slate-800">{santri.nama}</div>
-                            <div className="text-[10px] text-slate-400">{santri.noHp} • {santri.asrama}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-800">{santri.nama}</span>
+                              {santri.kelompokNama && (
+                                <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                                  {santri.kelompokNama}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400">{santri.noHp}</div>
                           </div>
                         </div>
 
@@ -816,7 +850,7 @@ export default function PengurusPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Cari santri, halaqoh, atau kegiatan..."
+                  placeholder="Cari santri, kelompok, atau kegiatan..."
                   value={feedSearch}
                   onChange={(e) => setFeedSearch(e.target.value)}
                   className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
@@ -860,7 +894,7 @@ export default function PengurusPage() {
                       {(() => {
                         const authorInfo = allUsers.find((u) => u.id === lap.userId) || santriList.find((u) => u.nama === lap.userNama);
                         const authorNama = authorInfo?.nama || lap.userNama;
-                        const authorAsrama = authorInfo?.asrama || lap.userAsrama;
+                        const authorKelompok = authorInfo?.kelompokNama;
                         const authorAvatar = authorInfo?.avatarUrl || lap.userAvatar;
 
                         return (
@@ -873,7 +907,11 @@ export default function PengurusPage() {
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-xs font-bold text-slate-800">{authorNama}</span>
-                                <span className="text-[10px] text-slate-400">• {authorAsrama}</span>
+                                {authorKelompok && (
+                                  <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                                    {authorKelompok}
+                                  </span>
+                                )}
                                 
                                 {lap.statusWaktu === 'TERLAMBAT' ? (
                                   <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
@@ -1088,7 +1126,7 @@ export default function PengurusPage() {
                     </button>
                   </div>
                   <div className="text-[11px] text-teal-200 font-medium truncate">
-                    {user?.asrama || 'Musyrif Halaqoh Pondok'}
+                    {user?.asrama || 'Musyrif PPTQ Batuan'}
                   </div>
                   <span className="inline-block mt-1 text-[9px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-400/40">
                     👑 Musyrif / Pembimbing
@@ -1167,7 +1205,7 @@ export default function PengurusPage() {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Tugas / Halaqoh Binaan</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
                   <input
                     type="text"
                     value={profileForm.asrama}

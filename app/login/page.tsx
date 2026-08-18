@@ -182,64 +182,12 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Demo Test Buttons */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wider text-center">
-              ⚡ Quick Fill Akun Demo (Klik untuk Isi):
+          {/* Footer Info */}
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-1 text-slate-500 text-xs">
+            <p className="font-semibold text-slate-700">Pondok Pesantren Tahfizh Qur'an Al-Usymuni Batuan</p>
+            <p className="text-[11px] text-slate-400">
+              Gunakan Username/NIS dan Password/PIN yang telah didaftarkan oleh Pengurus Pondok.
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('2026001', '123')}
-                className="p-2 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200/60 text-left transition group"
-              >
-                <div className="flex items-center gap-1 text-teal-800 font-semibold text-xs">
-                  <GraduationCap className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                  <span className="truncate">Santri</span>
-                </div>
-                <div className="text-[10px] text-teal-600 mt-0.5">Faiz (2026001)</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('musyrif.abdullah', '123')}
-                className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200/60 text-left transition group"
-              >
-                <div className="flex items-center gap-1 text-amber-900 font-semibold text-xs">
-                  <UserCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span className="truncate">Musyrif</span>
-                </div>
-                <div className="text-[10px] text-amber-700 mt-0.5">Ust. Abdullah</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('pengawas.usman', '123')}
-                className="p-2 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200/60 text-left transition group"
-              >
-                <div className="flex items-center gap-1 text-sky-900 font-semibold text-xs">
-                  <ShieldCheck className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                  <span className="truncate">Pengawas</span>
-                </div>
-                <div className="text-[10px] text-sky-700 mt-0.5">Ust. Dr. Usman</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('admin', 'admin')}
-                className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 text-left transition group"
-              >
-                <div className="flex items-center gap-1 text-emerald-900 font-semibold text-xs">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span className="truncate">Admin</span>
-                </div>
-                <div className="text-[10px] text-emerald-700 mt-0.5">Yayasan</div>
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 text-center text-[11px] text-slate-400">
-            Lupa password atau belum punya akun? Hubungi Musyrif / Admin Pondok.
           </div>
         </div>
       </div>
