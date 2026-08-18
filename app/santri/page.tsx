@@ -138,14 +138,6 @@ export default function SantriPage() {
     }
   }, [user, isLoading, mounted, router]);
 
-  if (!mounted || isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   // Start Live Camera
   const startLiveCamera = async (targetFacing?: 'user' | 'environment') => {
     setCameraError(null);
@@ -578,6 +570,14 @@ export default function SantriPage() {
 
   // Urutkan leaderboard
   const sortedLeaderboard = [...santriList].sort((a, b) => b.totalPoin - a.totalPoin);
+
+  if (!mounted || isLoading || !user) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-mobile-container bg-slate-50 min-h-screen pb-24 shadow-xl border-x border-slate-200">

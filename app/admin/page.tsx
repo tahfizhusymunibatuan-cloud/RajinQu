@@ -233,14 +233,6 @@ export default function AdminPage() {
     }
   }, [user, isLoading, mounted, router]);
 
-  if (!mounted || isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   // Memoized Filtered Data untuk Performa 60-120 FPS Super Ringan
   const filteredUsers = useMemo(() => {
     const query = userSearchQuery.trim().toLowerCase();
@@ -431,6 +423,14 @@ export default function AdminPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (!mounted || isLoading || !user) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-mobile-container bg-slate-50 min-h-screen pb-24 shadow-xl border-x border-slate-200">
