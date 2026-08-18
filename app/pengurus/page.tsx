@@ -178,7 +178,7 @@ export default function PengurusPage() {
     }
   }, [user, isLoading, mounted, router]);
 
-  if (!mounted || isLoading) {
+  if (!mounted || isLoading || !user) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
