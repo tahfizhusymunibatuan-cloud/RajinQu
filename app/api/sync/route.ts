@@ -97,14 +97,21 @@ export async function GET() {
     });
 
     // 4. Format Periode
-    const formattedPeriode = periodeResult.map((p: any) => ({
-      id: p.id,
-      nama: p.nama,
-      rentangTanggal: `${new Date(p.tanggalMulai).toISOString().split('T')[0]} - ${new Date(p.tanggalSelesai).toISOString().split('T')[0]}`,
-      targetPoin: p.targetPoinReward,
-      deskripsiReward: p.deskripsiReward || '',
-      isActive: p.isActive,
-    }));
+    const formattedPeriode = periodeResult.map((p: any) => {
+      const tMulai = p.tanggalMulai ? new Date(p.tanggalMulai).toISOString().split('T')[0] : '2026-08-01';
+      const tSelesai = p.tanggalSelesai ? new Date(p.tanggalSelesai).toISOString().split('T')[0] : '2026-08-31';
+
+      return {
+        id: p.id,
+        nama: p.nama,
+        tanggalMulai: tMulai,
+        tanggalSelesai: tSelesai,
+        rentangTanggal: `${tMulai} s/d ${tSelesai}`,
+        targetPoin: p.targetPoinReward,
+        deskripsiReward: p.deskripsiReward || '',
+        isActive: p.isActive,
+      };
+    });
 
     // 5. Format Laporan
     const formattedLaporan = laporanResult.map((lap: any) => {

@@ -58,6 +58,7 @@ import {
   Line
 } from 'recharts';
 import { PrayerCountdownWidget } from '@/components/prayer-countdown-widget';
+import VacationCountdownBanner from '@/components/VacationCountdownBanner';
 import { uploadImageToStorage, formatDriveImageUrl } from '@/lib/google-drive';
 import {
   formatSantriReportStatusMessage,
@@ -77,6 +78,7 @@ export default function PengurusPage() {
     santriList,
     kegiatanList,
     kelompokList,
+    activePeriode,
     approveLaporan,
     rejectLaporan,
     broadcastReminder,
@@ -502,6 +504,12 @@ export default function PengurusPage() {
         {/* ============================================================= */}
         {activeTab === 'validasi' && (
           <div className="space-y-4">
+            {/* Banner Perhitungan Liburan Selesai */}
+            <VacationCountdownBanner
+              periode={activePeriode}
+              variant="musyrif"
+            />
+
             {/* Widget Jadwal Sholat & Waktu Kegiatan PTQA */}
             <PrayerCountdownWidget compact kegiatanList={kegiatanList} />
 

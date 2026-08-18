@@ -107,6 +107,8 @@ export const MOCK_KEGIATAN: MockKegiatan[] = [];
 export interface MockPeriodeLiburan {
   id: string;
   nama: string;
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
   rentangTanggal: string;
   targetPoin: number;
   deskripsiReward: string;
@@ -117,7 +119,9 @@ export const MOCK_PERIODE_LIST: MockPeriodeLiburan[] = [
   {
     id: 'per-1',
     nama: 'Liburan Semester 1447 H / 2026 M',
-    rentangTanggal: '01 Agustus - 31 Agustus 2026',
+    tanggalMulai: '2026-08-01',
+    tanggalSelesai: '2026-08-31',
+    rentangTanggal: '2026-08-01 s/d 2026-08-31',
     targetPoin: 400,
     deskripsiReward: '🏆 Sertifikat Teladan Santri Berprestasi + Hadiah Beasiswa & Penghargaan Yayasan PTQA Batuan.',
     isActive: true,

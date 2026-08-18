@@ -39,6 +39,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { MOCK_REWARD_PERIODE, MockKegiatan, MockKelompok } from '@/lib/mock-data';
+import VacationCountdownBanner from '@/components/VacationCountdownBanner';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -51,6 +52,7 @@ export default function AdminPage() {
     pengawasList,
     laporanList,
     kelompokList,
+    activePeriode,
     isLoadingDb,
     syncFromDatabase,
     addMusyrif,
@@ -169,8 +171,9 @@ export default function AdminPage() {
   const [isAddPeriodeOpen, setIsAddPeriodeOpen] = useState(false);
   const [periodeForm, setPeriodeForm] = useState({
     nama: '',
-    rentangTanggal: '',
-    targetPoin: 450,
+    tanggalMulai: new Date().toISOString().split('T')[0],
+    tanggalSelesai: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    targetPoin: 400,
     deskripsiReward: '',
     isActive: false,
   });
@@ -180,7 +183,8 @@ export default function AdminPage() {
   const [editPeriodeForm, setEditPeriodeForm] = useState({
     id: '',
     nama: '',
-    rentangTanggal: '',
+    tanggalMulai: '2026-08-01',
+    tanggalSelesai: '2026-08-31',
     targetPoin: 400,
     deskripsiReward: '',
     isActive: false,
@@ -1449,6 +1453,12 @@ export default function AdminPage() {
               </button>
             </div>
 
+            {/* Banner Live Perhitungan Masa Liburan & Sisa Hari */}
+            <VacationCountdownBanner
+              periode={activePeriode}
+              variant="compact"
+            />
+
             {/* List Periode Cards */}
             <div className="space-y-3">
               {periodeList.map((periode) => (
@@ -1490,7 +1500,8 @@ export default function AdminPage() {
                           setEditPeriodeForm({
                             id: periode.id,
                             nama: periode.nama,
-                            rentangTanggal: periode.rentangTanggal,
+                            tanggalMulai: periode.tanggalMulai || (periode.rentangTanggal?.split(' s/d ')[0]) || '2026-08-01',
+                            tanggalSelesai: periode.tanggalSelesai || (periode.rentangTanggal?.split(' s/d ')[1]) || '2026-08-31',
                             targetPoin: periode.targetPoin,
                             deskripsiReward: periode.deskripsiReward || '',
                             isActive: periode.isActive,
@@ -2231,13 +2242,25 @@ export default function AdminPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (!periodeForm.nama || !periodeForm.rentangTanggal) return;
-                addPeriode(periodeForm);
+                if (!periodeForm.nama || !periodeForm.tanggalMulai || !periodeForm.tanggalSelesai) return;
+                const dMulai = new Date(periodeForm.tanggalMulai);
+                const dSelesai = new Date(periodeForm.tanggalSelesai);
+                if (dSelesai < dMulai) {
+                  alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai.');
+                  return;
+                }
+                const formattedRentang = `${periodeForm.tanggalMulai} s/d ${periodeForm.tanggalSelesai}`;
+
+                addPeriode({
+                  ...periodeForm,
+                  rentangTanggal: formattedRentang,
+                });
                 setIsAddPeriodeOpen(false);
                 setPeriodeForm({
                   nama: '',
-                  rentangTanggal: '',
-                  targetPoin: 450,
+                  tanggalMulai: new Date().toISOString().split('T')[0],
+                  tanggalSelesai: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  targetPoin: 400,
                   deskripsiReward: '',
                   isActive: false,
                 });
@@ -2257,17 +2280,47 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Rentang Tanggal Pelaksanaan</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: 15 Maret - 08 April 2026"
-                  value={periodeForm.rentangTanggal}
-                  onChange={(e) => setPeriodeForm({ ...periodeForm, rentangTanggal: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+              {/* DUAL DATE PICKER: TANGGAL MULAI & TANGGAL SELESAI */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Mulai</label>
+                  <input
+                    type="date"
+                    required
+                    value={periodeForm.tanggalMulai}
+                    onChange={(e) => setPeriodeForm({ ...periodeForm, tanggalMulai: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Selesai</label>
+                  <input
+                    type="date"
+                    required
+                    min={periodeForm.tanggalMulai}
+                    value={periodeForm.tanggalSelesai}
+                    onChange={(e) => setPeriodeForm({ ...periodeForm, tanggalSelesai: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                  />
+                </div>
               </div>
+
+              {/* DURASI HARI & TARGET HARIAN BADGE */}
+              {periodeForm.tanggalMulai && periodeForm.tanggalSelesai && (
+                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between text-[11px]">
+                  <div>
+                    <span className="text-amber-900 font-bold block">
+                      📅 Total: {Math.max(1, Math.ceil((new Date(periodeForm.tanggalSelesai).getTime() - new Date(periodeForm.tanggalMulai).getTime()) / (1000 * 60 * 60 * 24)) + 1)} Hari Liburan
+                    </span>
+                    <span className="text-[10px] text-amber-700">
+                      Target: ~{Math.ceil(periodeForm.targetPoin / Math.max(1, Math.ceil((new Date(periodeForm.tanggalSelesai).getTime() - new Date(periodeForm.tanggalMulai).getTime()) / (1000 * 60 * 60 * 24)) + 1))} Poin/Hari
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2 py-1 rounded-lg">
+                    {periodeForm.tanggalMulai} s/d {periodeForm.tanggalSelesai}
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Target Poin Reward</label>
@@ -2684,9 +2737,19 @@ export default function AdminPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const dMulai = new Date(editPeriodeForm.tanggalMulai);
+                const dSelesai = new Date(editPeriodeForm.tanggalSelesai);
+                if (dSelesai < dMulai) {
+                  alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai.');
+                  return;
+                }
+                const formattedRentang = `${editPeriodeForm.tanggalMulai} s/d ${editPeriodeForm.tanggalSelesai}`;
+
                 updatePeriode(editPeriodeForm.id, {
                   nama: editPeriodeForm.nama.trim(),
-                  rentangTanggal: editPeriodeForm.rentangTanggal.trim(),
+                  tanggalMulai: editPeriodeForm.tanggalMulai,
+                  tanggalSelesai: editPeriodeForm.tanggalSelesai,
+                  rentangTanggal: formattedRentang,
                   targetPoin: Number(editPeriodeForm.targetPoin) || 400,
                   deskripsiReward: editPeriodeForm.deskripsiReward.trim(),
                   isActive: editPeriodeForm.isActive,
@@ -2708,17 +2771,47 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Rentang Tanggal</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Contoh: 01 Maret - 25 Maret 2026"
-                  value={editPeriodeForm.rentangTanggal}
-                  onChange={(e) => setEditPeriodeForm({ ...editPeriodeForm, rentangTanggal: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+              {/* DUAL DATE PICKER: TANGGAL MULAI & TANGGAL SELESAI */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Mulai</label>
+                  <input
+                    type="date"
+                    required
+                    value={editPeriodeForm.tanggalMulai}
+                    onChange={(e) => setEditPeriodeForm({ ...editPeriodeForm, tanggalMulai: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tanggal Selesai</label>
+                  <input
+                    type="date"
+                    required
+                    min={editPeriodeForm.tanggalMulai}
+                    value={editPeriodeForm.tanggalSelesai}
+                    onChange={(e) => setEditPeriodeForm({ ...editPeriodeForm, tanggalSelesai: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                  />
+                </div>
               </div>
+
+              {/* DURASI HARI & TARGET HARIAN BADGE */}
+              {editPeriodeForm.tanggalMulai && editPeriodeForm.tanggalSelesai && (
+                <div className="p-2.5 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between text-[11px]">
+                  <div>
+                    <span className="text-amber-900 font-bold block">
+                      📅 Total: {Math.max(1, Math.ceil((new Date(editPeriodeForm.tanggalSelesai).getTime() - new Date(editPeriodeForm.tanggalMulai).getTime()) / (1000 * 60 * 60 * 24)) + 1)} Hari Liburan
+                    </span>
+                    <span className="text-[10px] text-amber-700">
+                      Target: ~{Math.ceil(editPeriodeForm.targetPoin / Math.max(1, Math.ceil((new Date(editPeriodeForm.tanggalSelesai).getTime() - new Date(editPeriodeForm.tanggalMulai).getTime()) / (1000 * 60 * 60 * 24)) + 1))} Poin/Hari
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2 py-1 rounded-lg">
+                    {editPeriodeForm.tanggalMulai} s/d {editPeriodeForm.tanggalSelesai}
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Target Poin Santri Teladan</label>

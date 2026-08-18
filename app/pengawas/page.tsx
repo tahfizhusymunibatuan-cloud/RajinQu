@@ -43,6 +43,7 @@ import {
   getWhatsAppUrl
 } from '@/lib/whatsapp';
 import { formatDriveImageUrl } from '@/lib/google-drive';
+import VacationCountdownBanner from '@/components/VacationCountdownBanner';
 
 export default function PengawasPage() {
   const router = useRouter();
@@ -297,6 +298,12 @@ export default function PengawasPage() {
         {/* ============================================================= */}
         {activeTab === 'laporan' && (
           <div className="space-y-3.5">
+            {/* Banner Perhitungan Liburan Selesai */}
+            <VacationCountdownBanner
+              periode={activePeriode}
+              variant="pengawas"
+            />
+
             {/* KPI Summary Cards */}
             <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="bg-white p-3 rounded-2xl border border-amber-200 shadow-xs">

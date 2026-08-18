@@ -53,6 +53,7 @@ import {
 import { MOCK_STATISTIK_MINGGUAN, MOCK_REWARD_PERIODE, MockKegiatan, MockLaporan } from '@/lib/mock-data';
 import { getWIBTimeString, checkWaktuKegiatan } from '@/lib/time-wib';
 import { PrayerCountdownWidget } from '@/components/prayer-countdown-widget';
+import VacationCountdownBanner from '@/components/VacationCountdownBanner';
 import { calculateActivityCountdown } from '@/lib/prayer-times';
 import { uploadImageToStorage, formatDriveImageUrl } from '@/lib/google-drive';
 import {
@@ -664,6 +665,14 @@ export default function SantriPage() {
                 </button>
               </div>
             </div>
+
+            {/* BANNER PERHITUNGAN MASA LIBURAN & SISA HARI */}
+            <VacationCountdownBanner
+              periode={activePeriode}
+              variant="santri"
+              targetPoin={targetPoinPeriode}
+              currentPoin={santriTotalPoin}
+            />
 
             {/* JADWAL SHOLAT WIB & COUNTDOWN REAL-TIME */}
             <PrayerCountdownWidget kegiatanList={kegiatanList} onOpenUpload={handleOpenUpload} />
