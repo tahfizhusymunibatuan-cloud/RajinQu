@@ -32,9 +32,9 @@ interface StoreContextType {
   toggleLike: (laporanId: string, userId: string) => void;
   addComment: (laporanId: string, user: MockUser, text: string) => void;
   broadcastReminder: (santriId: string) => Promise<{ success: boolean; message: string }>;
-  addMusyrif: (data: { nama: string; username: string; noHp: string; password: string; asrama: string }) => void;
+  addMusyrif: (data: { nama: string; username: string; noHp: string; password: string; asrama?: string; kelompokId?: string }) => void;
   addPengawas: (data: { nama: string; username: string; noHp: string; password: string; asrama?: string }) => void;
-  addSantri: (data: { nama: string; username: string; noHp: string; password: string; asrama: string; musyrifId?: string; kelompokId?: string }) => void;
+  addSantri: (data: { nama: string; username: string; noHp: string; password: string; asrama?: string; musyrifId?: string; kelompokId?: string }) => void;
   updateSantriMusyrif: (santriId: string, musyrifId: string) => void;
   updateUser: (userId: string, data: Partial<MockUser>) => void;
   deleteUser: (userId: string) => void;
@@ -260,7 +260,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     username: string;
     noHp: string;
     password: string;
-    asrama: string;
+    asrama?: string;
     musyrifId?: string;
     kelompokId?: string;
   }) => {
