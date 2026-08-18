@@ -1,7 +1,13 @@
-const CACHE_NAME = 'rajinqu-cache-v2';
+const CACHE_NAME = 'rajinqu-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable.png',
+  '/apple-touch-icon.png',
+  '/favicon.png',
+  '/icon.svg',
   '/logo-pondok.png',
 ];
 

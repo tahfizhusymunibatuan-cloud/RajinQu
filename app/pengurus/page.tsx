@@ -724,12 +724,12 @@ export default function PengurusPage() {
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => handleOpenTeguranModal(santri)}
-                          disabled={isSendingWA === santri.id}
                           className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-xs transition active:scale-95"
                         >
                           <Smartphone className="w-3.5 h-3.5" />
-                          <span>{isSendingWA === santri.id ? 'Mengirim...' : 'Kirim WA Teguran'}</span>
+                          <span>Kirim WA Teguran</span>
                         </button>
                       </div>
                     </div>

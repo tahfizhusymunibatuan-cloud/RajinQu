@@ -6,7 +6,7 @@ import DemoRoleSwitcher from '@/components/DemoRoleSwitcher';
 import { PwaInstallBanner } from '@/components/pwa-install-banner';
 
 export const viewport: Viewport = {
-  themeColor: '#0f766e',
+  themeColor: '#06322b',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -19,12 +19,19 @@ export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'black-translucent',
     title: 'RajinQu',
   },
   icons: {
-    icon: '/logo-pondok.png',
-    apple: '/logo-pondok.png',
+    icon: [
+      { url: '/favicon.png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
   other: {
     'mobile-web-app-capable': 'yes',

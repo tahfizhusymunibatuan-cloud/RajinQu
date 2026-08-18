@@ -79,11 +79,11 @@ export function PwaInstallBanner() {
         <div className="fixed bottom-20 inset-x-3 max-w-sm mx-auto z-50 animate-in slide-in-from-bottom-5 duration-300">
           <div className="bg-gradient-to-r from-teal-900 via-slate-900 to-emerald-950 text-white p-3.5 rounded-2xl shadow-2xl border border-amber-400/40 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-xl bg-white p-1 flex items-center justify-center border border-amber-300/60 shrink-0 shadow-sm">
+              <div className="w-12 h-12 rounded-2xl overflow-hidden border border-amber-400/50 shrink-0 shadow-md">
                 <img
-                  src="/logo-pondok.png"
-                  alt="Logo PPTQ Al-Usymuni"
-                  className="w-full h-full object-contain"
+                  src="/icon-192.png"
+                  alt="Logo RajinQu"
+                  className="w-full h-full object-cover"
                 />
               </div>
               <div className="min-w-0">
