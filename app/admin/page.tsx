@@ -2417,29 +2417,10 @@ export default function AdminPage() {
                 });
 
                 if (editMusyrifForm.kelompokId) {
-                  const updatedKel = kelompokList.map((k) => {
-                    if (k.id === editMusyrifForm.kelompokId) {
-                      return {
-                        ...k,
-                        musyrifId: editMusyrifForm.id,
-                        musyrifNama: editMusyrifForm.nama.trim(),
-                      };
-                    }
-                    return k;
+                  updateKelompok(editMusyrifForm.kelompokId, {
+                    musyrifId: editMusyrifForm.id,
+                    musyrifNama: editMusyrifForm.nama.trim(),
                   });
-                  saveKelompok(updatedKel);
-
-                  const updatedUsers = allUsers.map((s) => {
-                    if (s.kelompokId === editMusyrifForm.kelompokId) {
-                      return {
-                        ...s,
-                        musyrifId: editMusyrifForm.id,
-                        musyrifNama: editMusyrifForm.nama.trim(),
-                      };
-                    }
-                    return s;
-                  });
-                  saveUsers(updatedUsers);
                 }
 
                 setIsEditMusyrifOpen(false);
