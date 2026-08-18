@@ -195,4 +195,14 @@ export const MOCK_PERIODE_LIST: MockPeriodeLiburan[] = [
   },
 ];
 
+export const MOCK_STATISTIK_MINGGUAN = [
+  { hari: 'Senin', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Selasa', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Rabu', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Kamis', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Jumat', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Sabtu', target: 5, selesai: 0, poin: 0 },
+  { hari: 'Ahad', target: 5, selesai: 0, poin: 0 },
+];
+
 export const MOCK_REWARD_PERIODE = MOCK_PERIODE_LIST[0];
