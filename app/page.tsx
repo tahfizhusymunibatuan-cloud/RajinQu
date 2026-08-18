@@ -16,6 +16,8 @@ export default function RootPage() {
         router.push('/santri');
       } else if (user.role === 'MUSYRIF') {
         router.push('/pengurus');
+      } else if (user.role === 'PENGAWAS') {
+        router.push('/pengawas');
       } else if (user.role === 'SUPER_ADMIN') {
         router.push('/admin');
       }

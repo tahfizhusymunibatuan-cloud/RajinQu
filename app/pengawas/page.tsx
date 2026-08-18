@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
@@ -46,7 +46,7 @@ import { formatDriveImageUrl } from '@/lib/google-drive';
 
 export default function PengawasPage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const {
     laporanList,
     allUsers,
@@ -99,11 +99,25 @@ export default function PengawasPage() {
   // Comment input state per laporan
   const [commentInput, setCommentInput] = useState<{ [key: string]: string }>({});
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!user) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !user) {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [user, isLoading, mounted, router]);
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   // Extract unique kelompok / asrama / halaqoh list
   const halaqohList = Array.from(
@@ -115,51 +129,60 @@ export default function PengawasPage() {
     )
   ).filter(Boolean) as string[];
 
-  // Filtered Laporan across ALL santri
-  const filteredLaporan = laporanList.filter((lap) => {
-    const santriObj = santriList.find((s) => s.id === lap.userId || s.nama === lap.userNama);
-    const matchHalaqoh =
-      selectedHalaqoh === 'ALL' ||
-      lap.userAsrama === selectedHalaqoh ||
-      santriObj?.kelompokNama === selectedHalaqoh;
-    const matchStatus = selectedStatus === 'ALL' || lap.status === selectedStatus;
-    const matchSearch =
-      searchQuery === '' ||
-      lap.userNama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lap.kegiatanNama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (santriObj?.kelompokNama && santriObj.kelompokNama.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      lap.userAsrama.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchHalaqoh && matchStatus && matchSearch;
-  });
+  // Filtered Laporan across ALL santri (Memoized)
+  const filteredLaporan = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return laporanList.filter((lap) => {
+      const santriObj = santriList.find((s) => s.id === lap.userId || s.nama === lap.userNama);
+      const matchHalaqoh =
+        selectedHalaqoh === 'ALL' ||
+        lap.userAsrama === selectedHalaqoh ||
+        santriObj?.kelompokNama === selectedHalaqoh;
+      const matchStatus = selectedStatus === 'ALL' || lap.status === selectedStatus;
+      const matchSearch =
+        query === '' ||
+        lap.userNama.toLowerCase().includes(query) ||
+        lap.kegiatanNama.toLowerCase().includes(query) ||
+        (santriObj?.kelompokNama && santriObj.kelompokNama.toLowerCase().includes(query)) ||
+        lap.userAsrama.toLowerCase().includes(query);
+      return matchHalaqoh && matchStatus && matchSearch;
+    });
+  }, [laporanList, santriList, selectedHalaqoh, selectedStatus, searchQuery]);
 
-  // Filtered Santri across ALL halaqoh
-  const filteredSantri = santriList.filter((s) => {
-    const matchHalaqoh =
-      selectedHalaqoh === 'ALL' ||
-      s.kelompokNama === selectedHalaqoh ||
-      s.asrama === selectedHalaqoh;
-    const matchSearch =
-      searchQuery === '' ||
-      s.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (s.kelompokNama && s.kelompokNama.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      s.username.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchHalaqoh && matchSearch;
-  });
+  // Filtered Santri across ALL halaqoh (Memoized)
+  const filteredSantri = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return santriList.filter((s) => {
+      const matchHalaqoh =
+        selectedHalaqoh === 'ALL' ||
+        s.kelompokNama === selectedHalaqoh ||
+        s.asrama === selectedHalaqoh;
+      const matchSearch =
+        query === '' ||
+        s.nama.toLowerCase().includes(query) ||
+        (s.kelompokNama && s.kelompokNama.toLowerCase().includes(query)) ||
+        s.username.toLowerCase().includes(query);
+      return matchHalaqoh && matchSearch;
+    });
+  }, [santriList, selectedHalaqoh, searchQuery]);
 
-  // Feed Laporan (all approved reports for oversight & moderation)
-  const feedLaporans = laporanList.filter((lap) => {
-    const matchCat = feedCategoryFilter === 'ALL' || lap.kategori === feedCategoryFilter;
-    const matchSearch =
-      searchQuery === '' ||
-      lap.userNama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      lap.kegiatanNama.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  // Feed Laporan (all approved reports for oversight & moderation) (Memoized)
+  const feedLaporans = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return laporanList.filter((lap) => {
+      const matchCat = feedCategoryFilter === 'ALL' || lap.kategori === feedCategoryFilter;
+      const matchSearch =
+        query === '' ||
+        lap.userNama.toLowerCase().includes(query) ||
+        lap.kegiatanNama.toLowerCase().includes(query);
+      return matchCat && matchSearch;
+    });
+  }, [laporanList, feedCategoryFilter, searchQuery]);
 
-  // KPI Metrics
-  const totalPending = laporanList.filter((l) => l.status === 'PENDING').length;
-  const totalApproved = laporanList.filter((l) => l.status === 'APPROVED').length;
-  const totalRejected = laporanList.filter((l) => l.status === 'REJECTED').length;
+  // KPI Metrics (Memoized)
+  const totalPending = useMemo(() => laporanList.filter((l) => l.status === 'PENDING').length, [laporanList]);
+  const totalApproved = useMemo(() => laporanList.filter((l) => l.status === 'APPROVED').length, [laporanList]);
+  const totalRejected = useMemo(() => laporanList.filter((l) => l.status === 'REJECTED').length, [laporanList]);
 
   const handleSendComment = (laporanId: string) => {
     const text = commentInput[laporanId];
@@ -244,7 +267,7 @@ export default function PengawasPage() {
                 </span>
               </div>
               <p className="text-[11px] text-teal-200 font-medium truncate max-w-[200px]">
-                {user?.nama || 'Ustadz Dr. H. Usman Ridwan, M.Pd.'}
+                {user?.nama || 'Pengawas Kesantrian'}
               </p>
             </div>
           </div>

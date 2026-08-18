@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
@@ -35,12 +35,14 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronUp,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import { MOCK_REWARD_PERIODE, MockKegiatan, MockKelompok } from '@/lib/mock-data';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const {
     kegiatanList,
     allUsers,
@@ -49,6 +51,8 @@ export default function AdminPage() {
     pengawasList,
     laporanList,
     kelompokList,
+    isLoadingDb,
+    syncFromDatabase,
     addMusyrif,
     addPengawas,
     addSantri,
@@ -217,11 +221,48 @@ export default function AdminPage() {
     asrama: '',
   });
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!user) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !user) {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [user, isLoading, mounted, router]);
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Memoized Filtered Data untuk Performa 60-120 FPS Super Ringan
+  const filteredUsers = useMemo(() => {
+    const query = userSearchQuery.trim().toLowerCase();
+    return allUsers.filter((u) => {
+      const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+      const matchQuery =
+        query === '' ||
+        u.nama.toLowerCase().includes(query) ||
+        u.username.toLowerCase().includes(query) ||
+        u.noHp.toLowerCase().includes(query) ||
+        (u.asrama && u.asrama.toLowerCase().includes(query));
+      return matchRole && matchQuery;
+    });
+  }, [allUsers, userRoleFilter, userSearchQuery]);
+
+  const filteredKegiatan = useMemo(() => {
+    return kegiatanList.filter((keg) => {
+      if (kegiatanFilter === 'WAJIB') return keg.isWajib;
+      if (kegiatanFilter === 'SUNNAH') return !keg.isWajib;
+      return true;
+    });
+  }, [kegiatanList, kegiatanFilter]);
 
   const showNotification = (msg: string) => {
     setSavedSuccess(msg);
@@ -411,18 +452,33 @@ export default function AdminPage() {
                 <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1.5 py-0.5 rounded-full font-semibold">Yayasan</span>
               </div>
               <p className="text-[11px] text-teal-200 truncate max-w-[190px]">
-                {user?.nama || 'Ustadz H. Ahmad Fauzi, Lc.'}
+                {user?.nama || 'Super Admin Yayasan'}
               </p>
             </div>
           </div>
 
-          <button
-            onClick={logout}
-            title="Keluar"
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-teal-200 transition"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={async () => {
+                await syncFromDatabase();
+                showNotification('✨ Data berhasil disinkronkan dengan database Neon PostgreSQL!');
+              }}
+              title="Sinkronkan dengan Database Neon"
+              className="px-2 py-1 rounded-full bg-teal-900/60 hover:bg-teal-800/80 border border-teal-500/40 flex items-center gap-1 text-[10px] font-semibold text-teal-200 transition active:scale-95"
+            >
+              <RefreshCw className={`w-3 h-3 text-teal-300 ${isLoadingDb ? 'animate-spin' : ''}`} />
+              <span>{isLoadingDb ? 'Sinkron...' : 'Sync DB'}</span>
+            </button>
+
+            <button
+              onClick={logout}
+              title="Keluar"
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-teal-200 transition"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -575,31 +631,16 @@ export default function AdminPage() {
 
             {/* List User Cards */}
             <div className="space-y-2.5">
-              {(() => {
-                const filteredUsers = allUsers.filter((u) => {
-                  const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
-                  const matchQuery =
-                    userSearchQuery === '' ||
-                    u.nama.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                    u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                    u.noHp.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
-                    (u.asrama && u.asrama.toLowerCase().includes(userSearchQuery.toLowerCase()));
-                  return matchRole && matchQuery;
-                });
-
-                if (filteredUsers.length === 0) {
-                  return (
-                    <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-1">
-                      <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                      <p className="text-xs font-bold text-slate-700">Belum ada akun pada filter ini.</p>
-                      <p className="text-[11px] text-slate-400">
-                        Klik tombol <strong>+ Santri</strong>, <strong>+ Musyrif</strong>, atau <strong>+ Pengawas</strong> di atas untuk mendaftarkan akun baru.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return filteredUsers.map((u) => {
+              {filteredUsers.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-1">
+                  <Users className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-700">Belum ada akun pada filter ini.</p>
+                  <p className="text-[11px] text-slate-400">
+                    Klik tombol <strong>+ Santri</strong>, <strong>+ Musyrif</strong>, atau <strong>+ Pengawas</strong> di atas untuk mendaftarkan akun baru.
+                  </p>
+                </div>
+              ) : (
+                filteredUsers.map((u) => {
                   return (
                     <div
                       key={u.id}
@@ -791,8 +832,8 @@ export default function AdminPage() {
                       )}
                     </div>
                   );
-                });
-              })()}
+                })
+              )}
             </div>
           </div>
         )}
@@ -1228,13 +1269,26 @@ export default function AdminPage() {
 
             {/* List Kegiatan Cards */}
             <div className="space-y-2.5">
-              {kegiatanList
-                .filter((keg) => {
+              {(() => {
+                const filteredKegiatan = kegiatanList.filter((keg) => {
                   if (kegiatanFilter === 'WAJIB') return keg.isWajib;
                   if (kegiatanFilter === 'SUNNAH') return !keg.isWajib;
                   return true;
-                })
-                .map((keg) => (
+                });
+
+                if (filteredKegiatan.length === 0) {
+                  return (
+                    <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-1">
+                      <Sparkles className="w-10 h-10 mx-auto mb-2 text-teal-300" />
+                      <p className="text-xs font-bold text-slate-700">Belum ada kegiatan ibadah pada filter ini.</p>
+                      <p className="text-[11px] text-slate-400">
+                        Klik tombol <strong>+ Tambah Kegiatan</strong> di atas untuk membuat kegiatan harian baru.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredKegiatan.map((keg) => (
                   <div
                     key={keg.id}
                     className={`bg-white rounded-2xl p-3.5 border shadow-sm space-y-2.5 transition ${
@@ -1260,7 +1314,7 @@ export default function AdminPage() {
                                 : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
                             }`}
                           >
-                            {keg.isWajib ? '★ Wajib' : '☆ Sunnah'}
+                            {keg.isWajib ? '★ Wajib' : '○ Sunnah'}
                           </button>
                         </div>
 
@@ -1301,7 +1355,7 @@ export default function AdminPage() {
                         onClick={() => {
                           if (confirm(`Hapus kegiatan "${keg.nama}"?`)) {
                             deleteKegiatan(keg.id);
-                            showNotification('🗑️ Kegiatan berhasil dihapus.');
+                            showNotification(`🗑️ Kegiatan "${keg.nama}" berhasil dihapus.`);
                           }
                         }}
                         className="text-slate-300 hover:text-rose-600 p-1 transition"
@@ -1329,7 +1383,7 @@ export default function AdminPage() {
                             }}
                             className="bg-white border border-teal-300 rounded px-1.5 py-0.5 text-xs font-bold text-teal-950"
                           />
-                          <span className="text-teal-600 font-bold">s/d</span>
+                          <span className="text-teal-700 font-bold">s/d</span>
                           <input
                             type="time"
                             defaultValue={keg.jamSelesai || '06:00'}
@@ -1339,14 +1393,14 @@ export default function AdminPage() {
                             }}
                             className="bg-white border border-teal-300 rounded px-1.5 py-0.5 text-xs font-bold text-teal-950"
                           />
-                          <span className="text-[10px] font-bold text-teal-700">WIB</span>
+                          <span className="text-[10px] text-teal-700 font-bold">WIB</span>
                         </div>
                       </div>
                     )}
 
                     {/* Live Edit Poin Langsung */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between bg-slate-50 p-2 rounded-xl">
-                      <span className="text-[11px] font-semibold text-slate-600">
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-slate-500">
                         Poin Kegiatan per Laporan:
                       </span>
 
@@ -1367,7 +1421,8 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                ));
+              })()}
             </div>
           </div>
         )}

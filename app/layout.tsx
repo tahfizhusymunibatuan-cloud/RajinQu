@@ -44,8 +44,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id">
-      <body className="bg-slate-100 min-h-screen text-slate-800 antialiased selection:bg-teal-500 selection:text-white">
+    <html lang="id" suppressHydrationWarning>
+      <body
+        suppressHydrationWarning
+        className="bg-slate-100 min-h-screen text-slate-800 antialiased selection:bg-teal-500 selection:text-white"
+      >
         <AuthProvider>
           <StoreProvider>
             {children}

@@ -13,10 +13,12 @@ export function PwaInstallBanner() {
   useEffect(() => {
     // Register Service Worker
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => console.log('SW registered successfully:', reg.scope))
-        .catch((err) => console.log('SW registration failed:', err));
+      if (process.env.NODE_ENV === 'production') {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then((reg) => console.log('SW registered successfully:', reg.scope))
+          .catch((err) => console.warn('SW registration skipped:', err));
+      }
     }
 
     // Check if already in standalone/PWA mode

@@ -92,7 +92,6 @@ export default function LoginPage() {
               Monitoring Kegiatan Santri Liburan
             </p>
             <div className="mt-2.5 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-950/80 border border-teal-400/40 text-[11px] font-semibold text-amber-300 shadow-xs">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span>PP. TAHFIZH QUR'AN AL-USYMUNI BATUAN</span>
             </div>
           </div>

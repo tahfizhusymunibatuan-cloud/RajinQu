@@ -1,6 +1,10 @@
-const CACHE_NAME = 'rajinqu-cache-v3';
+const CACHE_NAME = 'rajinqu-cache-v4-fast';
 const STATIC_ASSETS = [
   '/',
+  '/santri',
+  '/pengurus',
+  '/admin',
+  '/pengawas',
   '/manifest.webmanifest',
   '/icon-192.png',
   '/icon-512.png',
@@ -38,38 +42,37 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Abaikan request non-HTTP/HTTPS (misalnya chrome-extension://, moz-extension://, dll)
   if (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://')) {
     return;
   }
 
-  // Abaikan request selain GET (misalnya POST/PUT API mutations)
+  // Hanya tangani GET requests
   if (event.request.method !== 'GET') {
     return;
   }
 
+  const url = new URL(event.request.url);
+
+  // Jangan cache live API mutations
+  if (url.pathname.startsWith('/api/users') || url.pathname.startsWith('/api/kelompok') || url.pathname.startsWith('/api/kegiatan')) {
+    return;
+  }
+
+  // Strategi Stale-While-Revalidate untuk Aset Statis & Bundle
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // Jika response valid dan merupakan request HTTP/HTTPS, simpan ke cache
-        if (
-          networkResponse &&
-          networkResponse.status === 200 &&
-          networkResponse.type === 'basic' &&
-          (event.request.url.startsWith('http://') || event.request.url.startsWith('https://'))
-        ) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache).catch(() => {});
-          });
-        }
-        return networkResponse;
-      })
-      .catch(async () => {
-        // Fallback ke cache jika offline / gagal fetch
-        const cached = await caches.match(event.request);
-        if (cached) return cached;
-        return caches.match('/');
-      })
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(event.request);
+
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone()).catch(() => {});
+          }
+          return networkResponse;
+        })
+        .catch(() => cachedResponse);
+
+      return cachedResponse || fetchPromise;
+    })
   );
 });

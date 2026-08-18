@@ -101,79 +101,8 @@ export const MOCK_USERS: MockUser[] = [
 // 0 Laporan Dummy Awal (Siap Menerima Laporan Riil)
 export const MOCK_LAPORAN: MockLaporan[] = [];
 
-// Master Kegiatan Standar Liburan Pondok
-export const MOCK_KEGIATAN: MockKegiatan[] = [
-  {
-    id: 'keg-1',
-    nama: 'Sholat Subuh Berjamaah di Masjid',
-    deskripsi: 'Wajib sholat Subuh berjamaah di masjid terdekat / musholla bersama keluarga.',
-    kategori: 'IBADAH',
-    poin: 15,
-    icon: 'Sunrise',
-    isWajib: true,
-    isTimeRestricted: true,
-    jamMulai: '04:15',
-    jamSelesai: '05:45',
-    targetWaktu: '04:15 - 05:45 WIB',
-  },
-  {
-    id: 'keg-2',
-    nama: "Muroja'ah & Ziyadah Al-Qur'an (1 Juz / 5 Lembar)",
-    deskripsi: "Menjaga hafalan Al-Qur'an harian minimal 5 lembar atau 1 juz.",
-    kategori: 'IBADAH',
-    poin: 20,
-    icon: 'BookOpen',
-    isWajib: true,
-    isTimeRestricted: false,
-    targetWaktu: 'Bebas / Kapan Saja',
-  },
-  {
-    id: 'keg-3',
-    nama: 'Sholat Dhuha & Dzikir Pagi',
-    deskripsi: "Melaksanakan sholat Dhuha minimal 2 rakaat dan membaca Al-Ma'tsurat / dzikir pagi.",
-    kategori: 'IBADAH',
-    poin: 10,
-    icon: 'SunMedium',
-    isWajib: true,
-    isTimeRestricted: true,
-    jamMulai: '06:30',
-    jamSelesai: '11:00',
-    targetWaktu: '06:30 - 11:00 WIB',
-  },
-  {
-    id: 'keg-4',
-    nama: 'Khidmah: Membantu Orang Tua di Rumah',
-    deskripsi: 'Membantu pekerjaan rumah tangga (membersihkan rumah, memasak, atau belanja).',
-    kategori: 'MANDIRI',
-    poin: 15,
-    icon: 'HeartHandshake',
-    isWajib: true,
-    isTimeRestricted: false,
-    targetWaktu: 'Bebas / Kapan Saja',
-  },
-  {
-    id: 'keg-5',
-    nama: 'Sholat Rawatib & Dzikir Ba\'da Sholat',
-    deskripsi: 'Menjaga sholat sunnah rawatib qobliyah & ba\'diyah serta dzikir harian.',
-    kategori: 'IBADAH',
-    poin: 10,
-    icon: 'Sparkles',
-    isWajib: false,
-    isTimeRestricted: false,
-    targetWaktu: 'Bebas / Kapan Saja',
-  },
-  {
-    id: 'keg-6',
-    nama: 'Membaca Kitab / Buku Bermanfaat (30 Menit)',
-    deskripsi: 'Membaca kitab kuning, buku motivasi, sirah nabawiyah, atau pelajaran pondok.',
-    kategori: 'BELAJAR',
-    poin: 10,
-    icon: 'GraduationCap',
-    isWajib: false,
-    isTimeRestricted: false,
-    targetWaktu: 'Bebas / Kapan Saja',
-  },
-];
+// 0 Kegiatan Awal (Siap Dibuat oleh Admin)
+export const MOCK_KEGIATAN: MockKegiatan[] = [];
 
 export interface MockPeriodeLiburan {
   id: string;

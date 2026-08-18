@@ -65,7 +65,7 @@ import {
 
 export default function SantriPage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const {
     laporanList,
     allUsers,
@@ -126,11 +126,25 @@ export default function SantriPage() {
   const [cameraRatio, setCameraRatio] = useState<'3/4' | '1/1' | '16/9'>('3/4');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!user) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading && !user) {
       router.push('/login');
     }
-  }, [user, router]);
+  }, [user, isLoading, mounted, router]);
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   // Start Live Camera
   const startLiveCamera = async (targetFacing?: 'user' | 'environment') => {
@@ -163,8 +177,7 @@ export default function SantriPage() {
         setCameraError('Browser tidak mendukung akses kamera langsung.');
       }
     } catch (err: any) {
-      console.warn('Camera permission denied or unavailable:', err);
-      setCameraError('Izin kamera belum aktif. Klik "Buka Kamera HP" di bawah.');
+      setCameraError('Izin kamera belum aktif. Silakan klik tombol "Aktifkan Kamera Live" di bawah.');
       setIsCameraActive(false);
     }
   };
@@ -234,19 +247,32 @@ export default function SantriPage() {
         }
       }
 
-      canvas.width = cropWidth;
-      canvas.height = cropHeight;
+      // Kompresi resolusi optimal (max width 1080px) untuk kecepatan upload maksimal
+      const maxDim = 1080;
+      let targetW = cropWidth;
+      let targetH = cropHeight;
+      if (cropWidth > maxDim) {
+        const scale = maxDim / cropWidth;
+        targetW = maxDim;
+        targetH = Math.round(cropHeight * scale);
+      }
+
+      canvas.width = targetW;
+      canvas.height = targetH;
 
       const context = canvas.getContext('2d');
       if (context) {
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+
         if (facingMode === 'user') {
           // Cerminkan foto selfie agar natural dan sesuai tampilan viewfinder
-          context.translate(cropWidth, 0);
+          context.translate(targetW, 0);
           context.scale(-1, 1);
         }
-        // Draw the cropped video frame onto canvas
-        context.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
+        // Draw the cropped video frame onto canvas with optimal scaling
+        context.drawImage(video, startX, startY, cropWidth, cropHeight, 0, 0, targetW, targetH);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         setPhotoPreview(dataUrl);
         stopLiveCamera();
       }
@@ -309,7 +335,6 @@ export default function SantriPage() {
               });
             }
           } catch (err) {
-            console.warn('Reverse geocode error', err);
             setGpsLocation({
               lat,
               long: lon,
@@ -320,7 +345,6 @@ export default function SantriPage() {
           }
         },
         (error) => {
-          console.warn('GPS Error or blocked', error);
           setGpsLocation({
             lat: -7.0116,
             long: 113.8279,
@@ -328,7 +352,7 @@ export default function SantriPage() {
           });
           setIsCapturingGps(false);
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
       );
     } else {
       setGpsLocation({
@@ -1532,33 +1556,22 @@ export default function SantriPage() {
 
                     {/* Fallback jika izin kamera di browser belum diaktifkan */}
                     {cameraError && (
-                      <div className="absolute inset-0 bg-slate-950/90 p-4 flex flex-col items-center justify-center text-center text-white space-y-2 z-20">
-                        <Camera className="w-8 h-8 text-amber-400 animate-pulse" />
-                        <p className="text-xs font-semibold">{cameraError}</p>
-                        <div className="flex gap-2 pt-1">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture={facingMode === 'user' ? 'user' : 'environment'}
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            className="hidden"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-xl shadow"
-                          >
-                            📸 Buka Kamera HP
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleUseDemoSelfie}
-                            className="px-2 py-1.5 bg-slate-800 text-amber-300 text-xs font-bold rounded-xl border border-amber-400/40"
-                          >
-                            ⚡ Demo
-                          </button>
+                      <div className="absolute inset-0 bg-slate-950/95 p-4 flex flex-col items-center justify-center text-center text-white space-y-2.5 z-20">
+                        <Camera className="w-9 h-9 text-amber-400 animate-pulse" />
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-amber-300">Wajib Menggunakan Kamera Langsung</p>
+                          <p className="text-[10px] text-slate-300 max-w-[240px] leading-relaxed">
+                            {cameraError}
+                          </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => startLiveCamera(facingMode)}
+                          className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-lg flex items-center gap-1.5 active:scale-95 transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Aktifkan Kamera Live</span>
+                        </button>
                       </div>
                     )}
                   </div>

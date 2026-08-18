@@ -15,9 +15,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
   // Helper untuk mendapatkan daftar seluruh pengguna aktif (Live dari localStorage)
   const getLiveUsers = (): MockUser[] => {
     if (typeof window === 'undefined') return MOCK_USERS;
@@ -35,15 +32,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return MOCK_USERS;
   };
 
+  // Inisialisasi status user secara instan & sinkron dari localStorage (mencegah logout saat refresh)
+  const [user, setUser] = useState<MockUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('rajinqu_auth_user') || localStorage.getItem('rajinqu_session');
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('rajinqu_auth_user') || localStorage.getItem('rajinqu_session');
+      return !stored;
+    }
+    return false;
+  });
+
   useEffect(() => {
-    // Muat session yang tersimpan jika ada
-    const storedUser = localStorage.getItem('rajinqu_auth_user');
-    if (storedUser) {
+    // Re-sinkronisasi data user saat komponen selesai dimount
+    const stored = localStorage.getItem('rajinqu_auth_user') || localStorage.getItem('rajinqu_session');
+    if (stored) {
       try {
-        const parsed = JSON.parse(storedUser);
+        const parsed = JSON.parse(stored);
         const liveUsers = getLiveUsers();
         const freshUser = liveUsers.find((u) => u.id === parsed.id || u.username === parsed.username);
         setUser(freshUser || parsed);
+        localStorage.setItem('rajinqu_auth_user', JSON.stringify(freshUser || parsed));
+        localStorage.setItem('rajinqu_session', JSON.stringify(freshUser || parsed));
       } catch {
         setUser(null);
       }
@@ -93,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     localStorage.removeItem('rajinqu_auth_user');
     localStorage.removeItem('rajinqu_session');
+    localStorage.removeItem('rajinqu_admin_preview');
   };
 
   return (

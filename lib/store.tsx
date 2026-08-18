@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   MOCK_LAPORAN,
   MOCK_USERS,
@@ -26,6 +26,8 @@ interface StoreContextType {
   periodeList: MockPeriodeLiburan[];
   kelompokList: MockKelompok[];
   activePeriode: MockPeriodeLiburan | undefined;
+  isLoadingDb: boolean;
+  syncFromDatabase: () => Promise<void>;
   addLaporan: (newLaporan: Omit<MockLaporan, 'id' | 'createdAt' | 'likesCount' | 'isLikedByUser' | 'comments' | 'status' | 'statusWaktu' | 'waktuLaporWIB'>) => Promise<MockLaporan>;
   approveLaporan: (laporanId: string, catatanPengurus?: string, customPoin?: number) => void;
   rejectLaporan: (laporanId: string, catatanPengurus: string, reviewerName?: string) => void;
@@ -63,145 +65,121 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [kegiatanList, setKegiatanList] = useState<MockKegiatan[]>(MOCK_KEGIATAN);
   const [periodeList, setPeriodeList] = useState<MockPeriodeLiburan[]>(MOCK_PERIODE_LIST);
   const [kelompokList, setKelompokList] = useState<MockKelompok[]>(MOCK_KELOMPOK);
+  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(false);
 
-  useEffect(() => {
-    // Reset/Wipe old demo data once for production transition
-    const isCleanV1 = localStorage.getItem('rajinqu_clean_v1');
-    if (!isCleanV1) {
-      localStorage.removeItem('rajinqu_users');
-      localStorage.removeItem('rajinqu_laporan');
-      localStorage.removeItem('rajinqu_kelompok');
-      localStorage.removeItem('rajinqu_session');
-      localStorage.setItem('rajinqu_clean_v1', 'true');
-      setAllUsers(MOCK_USERS);
-      setKelompokList(MOCK_KELOMPOK);
-      setLaporanList(MOCK_LAPORAN);
-      setKegiatanList(MOCK_KEGIATAN);
-      setPeriodeList(MOCK_PERIODE_LIST);
-      return;
+  // Helper Save & Sync ke LocalStorage
+  const saveUsers = (list: MockUser[]) => {
+    setAllUsers(list);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajinqu_users', JSON.stringify(list));
     }
-
-    let currentUsersList = MOCK_USERS;
-    const savedUsers = localStorage.getItem('rajinqu_users');
-    if (savedUsers) {
-      try {
-        const parsedUsers: MockUser[] = JSON.parse(savedUsers);
-        currentUsersList = parsedUsers.map((u) => ({
-          ...u,
-          asrama: u.role === 'SANTRI' ? '' : (u.asrama ? u.asrama.replace(/\s*\/\s*Halaqoh.*/i, '').replace(/Musyrif.*Halaqoh.*/i, 'Musyrif PPTQ Batuan').trim() : u.asrama),
-        }));
-        setAllUsers(currentUsersList);
-        localStorage.setItem('rajinqu_users', JSON.stringify(currentUsersList));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    const savedKelompok = localStorage.getItem('rajinqu_kelompok');
-    if (savedKelompok) {
-      try {
-        setKelompokList(JSON.parse(savedKelompok));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    const savedLaporan = localStorage.getItem('rajinqu_laporan');
-    if (savedLaporan) {
-      try {
-        const rawLaporans: MockLaporan[] = JSON.parse(savedLaporan);
-        // Sinkronisasi userAsrama & userNama laporan dengan data user terbaru
-        const syncedLaporans = rawLaporans.map((lap) => {
-          const userObj = currentUsersList.find((u) => u.id === lap.userId || u.nama === lap.userNama);
-          return {
-            ...lap,
-            userNama: userObj?.nama || lap.userNama,
-            userAsrama: '',
-            userAvatar: userObj?.avatarUrl || lap.userAvatar,
-          };
-        });
-        setLaporanList(syncedLaporans);
-        localStorage.setItem('rajinqu_laporan', JSON.stringify(syncedLaporans));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    const savedKegiatan = localStorage.getItem('rajinqu_kegiatan');
-    if (savedKegiatan) {
-      try {
-        const parsed: MockKegiatan[] = JSON.parse(savedKegiatan);
-        const merged = parsed.map((k) => {
-          const defaultK = MOCK_KEGIATAN.find((def) => def.id === k.id);
-          return {
-            ...defaultK,
-            ...k,
-          };
-        });
-        setKegiatanList(merged);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    const savedPeriode = localStorage.getItem('rajinqu_periode');
-    if (savedPeriode) {
-      try {
-        setPeriodeList(JSON.parse(savedPeriode));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, []);
-
-  const saveKelompok = (list: MockKelompok[]) => {
-    setKelompokList(list);
-    localStorage.setItem('rajinqu_kelompok', JSON.stringify(list));
-  };
-
-  const savePeriode = (list: MockPeriodeLiburan[]) => {
-    setPeriodeList(list);
-    localStorage.setItem('rajinqu_periode', JSON.stringify(list));
-  };
-
-  const activePeriode = periodeList.find((p) => p.isActive) || periodeList[0];
-
-  const saveKegiatan = (list: MockKegiatan[]) => {
-    setKegiatanList(list);
-    localStorage.setItem('rajinqu_kegiatan', JSON.stringify(list));
   };
 
   const saveLaporan = (list: MockLaporan[]) => {
     setLaporanList(list);
-    localStorage.setItem('rajinqu_laporan', JSON.stringify(list));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajinqu_laporan', JSON.stringify(list));
+    }
   };
 
-  const saveUsers = (list: MockUser[]) => {
-    setAllUsers(list);
-    localStorage.setItem('rajinqu_users', JSON.stringify(list));
+  const saveKegiatan = (list: MockKegiatan[]) => {
+    setKegiatanList(list);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajinqu_kegiatan', JSON.stringify(list));
+    }
   };
 
+  const saveKelompok = (list: MockKelompok[]) => {
+    setKelompokList(list);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajinqu_kelompok', JSON.stringify(list));
+    }
+  };
+
+  const savePeriode = (list: MockPeriodeLiburan[]) => {
+    setPeriodeList(list);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rajinqu_periode', JSON.stringify(list));
+    }
+  };
+
+  // Fungsi Sinkronisasi Data Riil Super Cepat dari PostgreSQL Neon DB via Batch API (/api/sync)
+  const syncFromDatabase = useCallback(async () => {
+    try {
+      setIsLoadingDb(true);
+      const res = await fetch('/api/sync');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const { users, kegiatan, kelompok, periode, laporan } = json.data;
+          if (Array.isArray(users) && users.length > 0) saveUsers(users);
+          if (Array.isArray(kegiatan)) saveKegiatan(kegiatan);
+          if (Array.isArray(kelompok)) saveKelompok(kelompok);
+          if (Array.isArray(periode)) savePeriode(periode);
+          if (Array.isArray(laporan)) saveLaporan(laporan);
+        }
+      }
+    } catch (err) {
+      console.warn('Sync from DB fallback to local cache:', err);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 1. Muat dari LocalStorage terlebih dahulu agar UI instan
+    if (typeof window !== 'undefined') {
+      const savedUsers = localStorage.getItem('rajinqu_users');
+      if (savedUsers) {
+        try {
+          setAllUsers(JSON.parse(savedUsers));
+        } catch (e) {}
+      }
+
+      const savedKelompok = localStorage.getItem('rajinqu_kelompok');
+      if (savedKelompok) {
+        try {
+          setKelompokList(JSON.parse(savedKelompok));
+        } catch (e) {}
+      }
+
+      const savedLaporan = localStorage.getItem('rajinqu_laporan');
+      if (savedLaporan) {
+        try {
+          setLaporanList(JSON.parse(savedLaporan));
+        } catch (e) {}
+      }
+
+      const savedKegiatan = localStorage.getItem('rajinqu_kegiatan');
+      if (savedKegiatan) {
+        try {
+          setKegiatanList(JSON.parse(savedKegiatan));
+        } catch (e) {}
+      }
+
+      const savedPeriode = localStorage.getItem('rajinqu_periode');
+      if (savedPeriode) {
+        try {
+          setPeriodeList(JSON.parse(savedPeriode));
+        } catch (e) {}
+      }
+    }
+
+    // 2. Jalankan sinkronisasi database Neon PostgreSQL di background
+    syncFromDatabase();
+  }, [syncFromDatabase]);
+
+  // Kategori pengguna
+  const santriList = allUsers.filter((u) => u.role === 'SANTRI');
   const musyrifList = allUsers.filter((u) => u.role === 'MUSYRIF');
   const pengawasList = allUsers.filter((u) => u.role === 'PENGAWAS');
-  const santriList = allUsers.filter((u) => u.role === 'SANTRI');
+  const activePeriode = periodeList.find((p) => p.isActive) || periodeList[0];
 
-  const addPengawas = (data: { nama: string; username: string; noHp: string; password: string; asrama?: string }) => {
-    const newPengawas: MockUser = {
-      id: `user-pengawas-${Date.now()}`,
-      username: data.username.trim().toLowerCase(),
-      noHp: data.noHp.trim(),
-      password: data.password.trim(),
-      nama: data.nama.trim(),
-      role: 'PENGAWAS',
-      avatarUrl: `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80`,
-      pondokNama: 'PTQA BATUAN',
-      asrama: data.asrama || 'Koordinator / Pengawas Kesantrian',
-      totalPoin: 0,
-    };
-    saveUsers([...allUsers, newPengawas]);
-  };
+  // ==========================================
+  // AKSI USER / PENGGUNA (POSTGRESQL NEON DB)
+  // ==========================================
 
-  const addMusyrif = (data: {
+  const addMusyrif = async (data: {
     nama: string;
     username: string;
     noHp: string;
@@ -225,7 +203,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     let updatedUsers = [...allUsers, newMusyrif];
 
-    // Jika langsung ditugaskan ke kelompok
     if (data.kelompokId) {
       const updatedKelompok = kelompokList.map((k) => {
         if (k.id === data.kelompokId) {
@@ -239,7 +216,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       saveKelompok(updatedKelompok);
 
-      // Sinkronkan santri di kelompok tersebut
       updatedUsers = updatedUsers.map((u) => {
         if (u.kelompokId === data.kelompokId) {
           return {
@@ -253,9 +229,68 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     saveUsers(updatedUsers);
+
+    // Kirim ke database PostgreSQL Neon
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newMusyrifId,
+          username: newMusyrif.username,
+          noHp: newMusyrif.noHp,
+          password: newMusyrif.password,
+          nama: newMusyrif.nama,
+          role: 'MUSYRIF',
+          kelompokId: data.kelompokId || null,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to sync new musyrif to DB:', e);
+    }
   };
 
-  const addSantri = (data: {
+  const addPengawas = async (data: {
+    nama: string;
+    username: string;
+    noHp: string;
+    password: string;
+    asrama?: string;
+  }) => {
+    const newPengawasId = `user-pengawas-${Date.now()}`;
+    const newPengawas: MockUser = {
+      id: newPengawasId,
+      username: data.username.trim().toLowerCase(),
+      noHp: data.noHp.trim(),
+      password: data.password.trim(),
+      nama: data.nama.trim(),
+      role: 'PENGAWAS',
+      avatarUrl: `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80`,
+      pondokNama: 'PTQA BATUAN',
+      asrama: 'Pengawas Kesantrian',
+      totalPoin: 0,
+    };
+    saveUsers([...allUsers, newPengawas]);
+
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newPengawasId,
+          username: newPengawas.username,
+          noHp: newPengawas.noHp,
+          password: newPengawas.password,
+          nama: newPengawas.nama,
+          role: 'PENGAWAS',
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to sync new pengawas to DB:', e);
+    }
+  };
+
+  const addSantri = async (data: {
     nama: string;
     username: string;
     noHp: string;
@@ -302,6 +337,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       peringkat: santriList.length + 1,
       selisihPeringkat: 0,
     };
+
     saveUsers([...allUsers, newSantri]);
 
     if (finalKelompokId) {
@@ -316,9 +352,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       saveKelompok(updatedKelompokList);
     }
+
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newSantriId,
+          username: newSantri.username,
+          noHp: newSantri.noHp,
+          password: newSantri.password,
+          nama: newSantri.nama,
+          role: 'SANTRI',
+          musyrifId: finalMusyrifId || null,
+          kelompokId: finalKelompokId || null,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to sync new santri to DB:', e);
+    }
   };
 
-  const updateSantriMusyrif = (santriId: string, musyrifId: string) => {
+  const updateSantriMusyrif = async (santriId: string, musyrifId: string) => {
     const targetMusyrif = allUsers.find((u) => u.id === musyrifId);
     const updated = allUsers.map((u) => {
       if (u.id === santriId) {
@@ -331,9 +386,69 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return u;
     });
     saveUsers(updated);
+
+    try {
+      await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: santriId, musyrifId }),
+      });
+    } catch (e) {
+      console.error('Failed to update santri musyrif in DB:', e);
+    }
   };
 
-  const addKelompok = (data: {
+  const updateUser = async (userId: string, data: Partial<MockUser>) => {
+    let targetMusyrifNama: string | undefined = undefined;
+    if (data.musyrifId !== undefined) {
+      const targetMusyrif = allUsers.find((u) => u.id === data.musyrifId);
+      targetMusyrifNama = targetMusyrif ? targetMusyrif.nama : 'Belum Ditugaskan';
+    }
+
+    let updatedUserObj: MockUser | null = null;
+    const updatedUsers = allUsers.map((u) => {
+      if (u.id === userId) {
+        updatedUserObj = {
+          ...u,
+          ...data,
+          musyrifNama: targetMusyrifNama !== undefined ? targetMusyrifNama : u.musyrifNama,
+        };
+        return updatedUserObj;
+      }
+      return u;
+    });
+
+    saveUsers(updatedUsers);
+
+    try {
+      await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: userId, ...data }),
+      });
+    } catch (e) {
+      console.error('Failed to update user in DB:', e);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    const updated = allUsers.filter((u) => u.id !== userId);
+    saveUsers(updated);
+
+    try {
+      await fetch(`/api/users?id=${userId}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('Failed to delete user in DB:', e);
+    }
+  };
+
+  // ==========================================
+  // AKSI KELOMPOK (POSTGRESQL NEON DB)
+  // ==========================================
+
+  const addKelompok = async (data: {
     nama: string;
     deskripsi?: string;
     musyrifId: string;
@@ -359,7 +474,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const updatedKelompokList = [...kelompokList, newKelompok];
     saveKelompok(updatedKelompokList);
 
-    // Sinkronisasi data santri yang terpilih
     if (santriIds.length > 0) {
       const updatedUsers = allUsers.map((u) => {
         if (santriIds.includes(u.id)) {
@@ -375,9 +489,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       saveUsers(updatedUsers);
     }
+
+    try {
+      await fetch('/api/kelompok', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newId,
+          nama: data.nama,
+          deskripsi: data.deskripsi,
+          musyrifId: data.musyrifId,
+          santriIds: santriIds,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to create kelompok in DB:', e);
+    }
   };
 
-  const updateKelompok = (id: string, data: Partial<MockKelompok>) => {
+  const updateKelompok = async (id: string, data: Partial<MockKelompok>) => {
     const currentKel = kelompokList.find((k) => k.id === id);
     if (!currentKel) return;
 
@@ -419,9 +549,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return u;
     });
     saveUsers(updatedUsers);
+
+    try {
+      await fetch('/api/kelompok', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          nama: data.nama,
+          deskripsi: data.deskripsi,
+          musyrifId: finalMusyrifId,
+          santriIds: finalSantriIds,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to update kelompok in DB:', e);
+    }
   };
 
-  const deleteKelompok = (id: string) => {
+  const deleteKelompok = async (id: string) => {
     const updatedList = kelompokList.filter((k) => k.id !== id);
     saveKelompok(updatedList);
 
@@ -436,120 +582,225 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return u;
     });
     saveUsers(updatedUsers);
+
+    try {
+      await fetch(`/api/kelompok?id=${id}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('Failed to delete kelompok in DB:', e);
+    }
   };
 
   const assignSantriToKelompok = (santriId: string, kelompokId: string) => {
     const targetKel = kelompokList.find((k) => k.id === kelompokId);
     if (!targetKel) return;
 
-    const updatedKelompokList = kelompokList.map((k) => {
-      if (k.id === kelompokId) {
-        const existingIds = k.santriIds.filter((sid) => sid !== santriId);
-        return { ...k, santriIds: [...existingIds, santriId] };
-      } else {
-        return { ...k, santriIds: k.santriIds.filter((sid) => sid !== santriId) };
-      }
-    });
-    saveKelompok(updatedKelompokList);
-
-    const pjMusyrif = allUsers.find((u) => u.id === targetKel.musyrifId);
-    const updatedUsers = allUsers.map((u) => {
-      if (u.id === santriId) {
-        return {
-          ...u,
-          kelompokId: targetKel.id,
-          kelompokNama: targetKel.nama,
-          musyrifId: targetKel.musyrifId,
-          musyrifNama: pjMusyrif ? pjMusyrif.nama : u.musyrifNama,
-        };
-      }
-      return u;
-    });
-    saveUsers(updatedUsers);
+    const newSantriIds = Array.from(new Set([...targetKel.santriIds, santriId]));
+    updateKelompok(kelompokId, { santriIds: newSantriIds });
   };
 
   const removeSantriFromKelompok = (santriId: string) => {
-    const updatedKelompokList = kelompokList.map((k) => ({
-      ...k,
-      santriIds: k.santriIds.filter((sid) => sid !== santriId),
-    }));
-    saveKelompok(updatedKelompokList);
+    const targetKel = kelompokList.find((k) => k.santriIds.includes(santriId));
+    if (!targetKel) return;
 
-    const updatedUsers = allUsers.map((u) => {
-      if (u.id === santriId) {
-        return {
-          ...u,
-          kelompokId: undefined,
-          kelompokNama: undefined,
-        };
-      }
-      return u;
-    });
-    saveUsers(updatedUsers);
+    const newSantriIds = targetKel.santriIds.filter((sid) => sid !== santriId);
+    updateKelompok(targetKel.id, { santriIds: newSantriIds });
   };
 
-  const updateUser = (userId: string, data: Partial<MockUser>) => {
-    let targetMusyrifNama: string | undefined = undefined;
-    if (data.musyrifId !== undefined) {
-      const targetMusyrif = allUsers.find((u) => u.id === data.musyrifId);
-      targetMusyrifNama = targetMusyrif ? targetMusyrif.nama : 'Belum Ditugaskan';
-    }
+  // ==========================================
+  // AKSI KEGIATAN (POSTGRESQL NEON DB)
+  // ==========================================
 
-    let updatedUserObj: MockUser | null = null;
-    const updatedUsers = allUsers.map((u) => {
-      if (u.id === userId) {
-        updatedUserObj = {
-          ...u,
+  const addKegiatan = async (data: Omit<MockKegiatan, 'id'>) => {
+    const newId = `keg-${Date.now()}`;
+    const newKeg: MockKegiatan = {
+      ...data,
+      id: newId,
+    };
+    saveKegiatan([...kegiatanList, newKeg]);
+
+    try {
+      await fetch('/api/kegiatan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newId,
           ...data,
-          musyrifNama: targetMusyrifNama !== undefined ? targetMusyrifNama : u.musyrifNama,
-        };
-        return updatedUserObj;
-      }
-      return u;
-    });
-
-    saveUsers(updatedUsers);
-
-    // Sinkronisasi pembaruan ke seluruh laporan santri terkait
-    if (updatedUserObj) {
-      const targetUser = updatedUserObj as MockUser;
-      const updatedLaporans = laporanList.map((lap) => {
-        if (lap.userId === userId || lap.userNama === targetUser.nama) {
-          return {
-            ...lap,
-            userNama: targetUser.nama,
-            userAsrama: targetUser.asrama || lap.userAsrama,
-            userAvatar: targetUser.avatarUrl || lap.userAvatar,
-          };
-        }
-        return lap;
+        }),
       });
-      saveLaporan(updatedLaporans);
-
-      // Perbarui session yang aktif di localStorage jika user ini sedang login
-      try {
-        const currentSession = localStorage.getItem('rajinqu_session');
-        if (currentSession) {
-          const parsed = JSON.parse(currentSession);
-          if (parsed.id === userId) {
-            localStorage.setItem('rajinqu_session', JSON.stringify({ ...parsed, ...targetUser }));
-          }
-        }
-      } catch (e) {
-        console.error('Failed to sync session', e);
-      }
+    } catch (e) {
+      console.error('Failed to create kegiatan in DB:', e);
     }
   };
 
-  const deleteUser = (userId: string) => {
-    const updated = allUsers.filter((u) => u.id !== userId);
-    saveUsers(updated);
+  const updateKegiatanPoin = async (id: string, newPoin: number) => {
+    const updated = kegiatanList.map((k) => (k.id === id ? { ...k, poin: newPoin } : k));
+    saveKegiatan(updated);
+
+    try {
+      await fetch('/api/kegiatan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, poin: newPoin }),
+      });
+    } catch (e) {
+      console.error('Failed to update kegiatan poin in DB:', e);
+    }
   };
+
+  const toggleKegiatanWajib = async (id: string) => {
+    const targetKeg = kegiatanList.find((k) => k.id === id);
+    if (!targetKeg) return;
+    const newStatus = !targetKeg.isWajib;
+
+    const updated = kegiatanList.map((k) => (k.id === id ? { ...k, isWajib: newStatus } : k));
+    saveKegiatan(updated);
+
+    try {
+      await fetch('/api/kegiatan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isWajib: newStatus }),
+      });
+    } catch (e) {
+      console.error('Failed to toggle kegiatan wajib in DB:', e);
+    }
+  };
+
+  const updateKegiatanTime = async (id: string, isTimeRestricted: boolean, jamMulai?: string, jamSelesai?: string) => {
+    const updated = kegiatanList.map((k) => {
+      if (k.id === id) {
+        return {
+          ...k,
+          isTimeRestricted,
+          jamMulai,
+          jamSelesai,
+          targetWaktu: isTimeRestricted && jamMulai && jamSelesai ? `${jamMulai} - ${jamSelesai} WIB` : 'Bebas / Kapan Saja',
+        };
+      }
+      return k;
+    });
+    saveKegiatan(updated);
+
+    try {
+      await fetch('/api/kegiatan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          isTimeRestricted,
+          jamMulai: jamMulai || null,
+          jamSelesai: jamSelesai || null,
+          targetWaktu: isTimeRestricted && jamMulai && jamSelesai ? `${jamMulai} - ${jamSelesai} WIB` : 'Bebas / Kapan Saja',
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to update kegiatan time in DB:', e);
+    }
+  };
+
+  const deleteKegiatan = async (id: string) => {
+    const updated = kegiatanList.filter((k) => k.id !== id);
+    saveKegiatan(updated);
+
+    try {
+      await fetch(`/api/kegiatan?id=${id}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('Failed to delete kegiatan in DB:', e);
+    }
+  };
+
+  // ==========================================
+  // AKSI PERIODE (POSTGRESQL NEON DB)
+  // ==========================================
+
+  const addPeriode = async (data: Omit<MockPeriodeLiburan, 'id'>) => {
+    const newId = `per-${Date.now()}`;
+    const newPer: MockPeriodeLiburan = {
+      ...data,
+      id: newId,
+    };
+    if (newPer.isActive) {
+      const deact = periodeList.map((p) => ({ ...p, isActive: false }));
+      savePeriode([...deact, newPer]);
+    } else {
+      savePeriode([...periodeList, newPer]);
+    }
+
+    try {
+      await fetch('/api/periode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: newId, ...data }),
+      });
+    } catch (e) {
+      console.error('Failed to create periode in DB:', e);
+    }
+  };
+
+  const updatePeriode = async (id: string, data: Partial<MockPeriodeLiburan>) => {
+    let updated = periodeList.map((p) => (p.id === id ? { ...p, ...data } : p));
+    if (data.isActive) {
+      updated = updated.map((p) => ({
+        ...p,
+        isActive: p.id === id,
+      }));
+    }
+    savePeriode(updated);
+
+    try {
+      await fetch('/api/periode', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...data }),
+      });
+    } catch (e) {
+      console.error('Failed to update periode in DB:', e);
+    }
+  };
+
+  const togglePeriodeActive = async (id: string) => {
+    const updated = periodeList.map((p) => ({
+      ...p,
+      isActive: p.id === id,
+    }));
+    savePeriode(updated);
+
+    try {
+      await fetch('/api/periode', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isActive: true }),
+      });
+    } catch (e) {
+      console.error('Failed to toggle active periode in DB:', e);
+    }
+  };
+
+  const deletePeriode = async (id: string) => {
+    const updated = periodeList.filter((p) => p.id !== id);
+    savePeriode(updated);
+
+    try {
+      await fetch(`/api/periode?id=${id}`, {
+        method: 'DELETE',
+      });
+    } catch (e) {
+      console.error('Failed to delete periode in DB:', e);
+    }
+  };
+
+  // ==========================================
+  // AKSI LAPORAN (POSTGRESQL NEON DB)
+  // ==========================================
 
   const addLaporan = async (data: Omit<MockLaporan, 'id' | 'createdAt' | 'likesCount' | 'isLikedByUser' | 'comments' | 'status' | 'statusWaktu' | 'waktuLaporWIB'>): Promise<MockLaporan> => {
     const waktuStr = getWIBTimeString();
+    const newId = `lap-${Date.now()}`;
 
-    // Selalu ambil bobot poin resmi dari kegiatan yang diatur oleh Super Admin
     const keg = kegiatanList.find((k) => k.id === data.kegiatanId);
     const officialPoin = keg ? keg.poin : (data.poin || 20);
 
@@ -562,7 +813,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const newEntry: MockLaporan = {
       ...data,
       poin: officialPoin,
-      id: `lap-${Date.now()}`,
+      id: newId,
       status: 'PENDING',
       statusWaktu: checkResult.statusWaktu,
       waktuLaporWIB: waktuStr,
@@ -575,26 +826,44 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const updatedList = [newEntry, ...laporanList];
     saveLaporan(updatedList);
 
+    try {
+      await fetch('/api/laporan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newId,
+          userId: data.userId,
+          kegiatanId: data.kegiatanId,
+          poin: officialPoin,
+          fotoUrl: data.fotoUrl,
+          lat: data.lat,
+          long: data.long,
+          lokasiName: data.lokasiName,
+          catatanSantri: data.catatanSantri,
+          statusWaktu: checkResult.statusWaktu,
+          waktuLaporWIB: waktuStr,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to save report in DB:', e);
+    }
+
     return newEntry;
   };
 
-  const approveLaporan = (laporanId: string, catatanPengurus?: string, customPoin?: number) => {
+  const approveLaporan = async (laporanId: string, catatanPengurus?: string, customPoin?: number) => {
     let targetSantriId = '';
     let targetSantriNama = '';
     let poinGained = 0;
-    let kegiatanName = '';
 
     const updatedLaporans = laporanList.map((lap) => {
       if (lap.id === laporanId) {
         targetSantriId = lap.userId;
         targetSantriNama = lap.userNama;
 
-        // Ambil poin resmi dari Super Admin (kegiatanList) atau custom poin jika ditentukan musyrif
         const officialKeg = kegiatanList.find((k) => k.id === lap.kegiatanId);
         const finalPoin = customPoin !== undefined ? customPoin : (officialKeg ? officialKeg.poin : lap.poin);
-
         poinGained = finalPoin;
-        kegiatanName = lap.kegiatanNama;
 
         return {
           ...lap,
@@ -614,44 +883,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           ? { ...s, totalPoin: s.totalPoin + poinGained }
           : s
       );
+      saveUsers(updatedUsersRaw);
+    }
 
-      // Hitung ulang peringkat ranking semua santri berdasarkan totalPoin tertinggi
-      const santriSorted = updatedUsersRaw
-        .filter((u) => u.role === 'SANTRI')
-        .sort((a, b) => b.totalPoin - a.totalPoin);
-
-      const rankedUsers = updatedUsersRaw.map((u) => {
-        if (u.role === 'SANTRI') {
-          const rankIdx = santriSorted.findIndex((s) => s.id === u.id);
-          return {
-            ...u,
-            peringkat: rankIdx !== -1 ? rankIdx + 1 : u.peringkat,
-          };
-        }
-        return u;
+    try {
+      await fetch('/api/laporan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: laporanId,
+          status: 'APPROVED',
+          catatanReview: catatanPengurus || 'Mumtaz! Laporan telah disetujui.',
+          customPoin,
+        }),
       });
-
-      saveUsers(rankedUsers);
-
-      // Sinkronisasi session aktif di localStorage jika user ini sedang login
-      try {
-        const currentSession = localStorage.getItem('rajinqu_session');
-        if (currentSession) {
-          const parsed = JSON.parse(currentSession);
-          if (parsed.id === targetSantriId || parsed.nama === targetSantriNama) {
-            const updatedSantriObj = rankedUsers.find((u) => u.id === targetSantriId || u.nama === targetSantriNama);
-            if (updatedSantriObj) {
-              localStorage.setItem('rajinqu_session', JSON.stringify({ ...parsed, ...updatedSantriObj }));
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to sync session points', e);
-      }
+    } catch (e) {
+      console.error('Failed to approve report in DB:', e);
     }
   };
 
-  const rejectLaporan = (laporanId: string, catatanPengurus: string) => {
+  const rejectLaporan = async (laporanId: string, catatanPengurus: string) => {
     let targetSantriId = '';
     let targetSantriNama = '';
     let deductedPoin = 0;
@@ -675,46 +926,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
     saveLaporan(updatedLaporans);
 
-    // Jika sebelumnya sudah APPROVED dan dibatalkan/ditolak, kurangi poin santri
     if (wasApproved && targetSantriId && deductedPoin > 0) {
       const updatedUsersRaw = allUsers.map((s) =>
         s.id === targetSantriId || s.nama === targetSantriNama
           ? { ...s, totalPoin: Math.max(0, s.totalPoin - deductedPoin) }
           : s
       );
+      saveUsers(updatedUsersRaw);
+    }
 
-      const santriSorted = updatedUsersRaw
-        .filter((u) => u.role === 'SANTRI')
-        .sort((a, b) => b.totalPoin - a.totalPoin);
-
-      const rankedUsers = updatedUsersRaw.map((u) => {
-        if (u.role === 'SANTRI') {
-          const rankIdx = santriSorted.findIndex((s) => s.id === u.id);
-          return {
-            ...u,
-            peringkat: rankIdx !== -1 ? rankIdx + 1 : u.peringkat,
-          };
-        }
-        return u;
+    try {
+      await fetch('/api/laporan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: laporanId,
+          status: 'REJECTED',
+          catatanReview: catatanPengurus || 'Foto kurang jelas / belum memenuhi kriteria kegiatan.',
+        }),
       });
-
-      saveUsers(rankedUsers);
-
-      // Sinkronisasi session aktif
-      try {
-        const currentSession = localStorage.getItem('rajinqu_session');
-        if (currentSession) {
-          const parsed = JSON.parse(currentSession);
-          if (parsed.id === targetSantriId || parsed.nama === targetSantriNama) {
-            const updatedSantriObj = rankedUsers.find((u) => u.id === targetSantriId || u.nama === targetSantriNama);
-            if (updatedSantriObj) {
-              localStorage.setItem('rajinqu_session', JSON.stringify({ ...parsed, ...updatedSantriObj }));
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to sync session points', e);
-      }
+    } catch (e) {
+      console.error('Failed to reject report in DB:', e);
     }
   };
 
@@ -776,83 +1008,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const addKegiatan = (data: Omit<MockKegiatan, 'id'>) => {
-    const newKeg: MockKegiatan = {
-      ...data,
-      id: `keg-${Date.now()}`,
-    };
-    saveKegiatan([...kegiatanList, newKeg]);
-  };
-
-  const updateKegiatanPoin = (id: string, newPoin: number) => {
-    const updated = kegiatanList.map((k) => (k.id === id ? { ...k, poin: newPoin } : k));
-    saveKegiatan(updated);
-  };
-
-  const toggleKegiatanWajib = (id: string) => {
-    const updated = kegiatanList.map((k) => (k.id === id ? { ...k, isWajib: !k.isWajib } : k));
-    saveKegiatan(updated);
-  };
-
-  const updateKegiatanTime = (id: string, isTimeRestricted: boolean, jamMulai?: string, jamSelesai?: string) => {
-    const updated = kegiatanList.map((k) => {
-      if (k.id === id) {
-        return {
-          ...k,
-          isTimeRestricted,
-          jamMulai,
-          jamSelesai,
-          targetWaktu: isTimeRestricted && jamMulai && jamSelesai ? `${jamMulai} - ${jamSelesai} WIB` : 'Bebas / Kapan Saja',
-        };
-      }
-      return k;
-    });
-    saveKegiatan(updated);
-  };
-
-  const deleteKegiatan = (id: string) => {
-    const updated = kegiatanList.filter((k) => k.id !== id);
-    saveKegiatan(updated);
-  };
-
-  const addPeriode = (data: Omit<MockPeriodeLiburan, 'id'>) => {
-    const newPer: MockPeriodeLiburan = {
-      ...data,
-      id: `per-${Date.now()}`,
-    };
-    // Jika periode baru diset aktif, nonaktifkan periode yang lain
-    if (newPer.isActive) {
-      const deact = periodeList.map((p) => ({ ...p, isActive: false }));
-      savePeriode([...deact, newPer]);
-    } else {
-      savePeriode([...periodeList, newPer]);
-    }
-  };
-
-  const updatePeriode = (id: string, data: Partial<MockPeriodeLiburan>) => {
-    let updated = periodeList.map((p) => (p.id === id ? { ...p, ...data } : p));
-    if (data.isActive) {
-      updated = updated.map((p) => ({
-        ...p,
-        isActive: p.id === id,
-      }));
-    }
-    savePeriode(updated);
-  };
-
-  const togglePeriodeActive = (id: string) => {
-    const updated = periodeList.map((p) => ({
-      ...p,
-      isActive: p.id === id, // Mengaktifkan periode yang dipilih & menonaktifkan yang lain
-    }));
-    savePeriode(updated);
-  };
-
-  const deletePeriode = (id: string) => {
-    const updated = periodeList.filter((p) => p.id !== id);
-    savePeriode(updated);
-  };
-
   const resetDemoData = () => {
     setLaporanList(MOCK_LAPORAN);
     setAllUsers(MOCK_USERS);
@@ -878,6 +1033,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         periodeList,
         kelompokList,
         activePeriode,
+        isLoadingDb,
+        syncFromDatabase,
         addLaporan,
         approveLaporan,
         rejectLaporan,

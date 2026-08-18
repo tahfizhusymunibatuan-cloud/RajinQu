@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
@@ -70,7 +70,7 @@ import {
 
 export default function PengurusPage() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, isLoading, logout } = useAuth();
   const {
     laporanList,
     allUsers,
@@ -156,52 +156,79 @@ export default function PengurusPage() {
 
   const musyrifAvatarInputRef = useRef<HTMLInputElement>(null);
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    } else {
-      setProfileForm({
-        nama: user.nama || '',
-        username: user.username || '',
-        noHp: user.noHp || '',
-        password: user.password || '',
-        asrama: user.asrama || '',
-      });
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !isLoading) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        setProfileForm({
+          nama: user.nama || '',
+          username: user.username || '',
+          noHp: user.noHp || '',
+          password: user.password || '',
+          asrama: user.asrama || '',
+        });
+      }
     }
-  }, [user, router]);
+  }, [user, isLoading, mounted, router]);
+
+  if (!mounted || isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Filter santri binaan yang dipertanggungjawabkan ke musyrif ini
-  const mySantriBinaan = santriList.filter(
-    (s) => s.musyrifId === user?.id || s.musyrifNama === user?.nama
-  );
+  // Filter santri binaan yang dipertanggungjawabkan ke musyrif ini (Memoized)
+  const mySantriBinaan = useMemo(() => {
+    return santriList.filter(
+      (s) => s.musyrifId === user?.id || s.musyrifNama === user?.nama
+    );
+  }, [santriList, user?.id, user?.nama]);
 
-  const displaySantri = mySantriBinaan.length > 0 ? mySantriBinaan : santriList;
+  const displaySantri = useMemo(() => {
+    return mySantriBinaan.length > 0 ? mySantriBinaan : santriList;
+  }, [mySantriBinaan, santriList]);
 
-  const pendingLaporans = laporanList.filter((l) => {
-    if (l.status !== 'PENDING') return false;
-    const s = santriList.find((usr) => usr.id === l.userId || usr.nama === l.userNama);
-    if (!s) return true;
-    return mySantriBinaan.length === 0 || s.musyrifId === user?.id || s.musyrifNama === user?.nama;
-  });
+  const pendingLaporans = useMemo(() => {
+    return laporanList.filter((l) => {
+      if (l.status !== 'PENDING') return false;
+      const s = santriList.find((usr) => usr.id === l.userId || usr.nama === l.userNama);
+      if (!s) return true;
+      return mySantriBinaan.length === 0 || s.musyrifId === user?.id || s.musyrifNama === user?.nama;
+    });
+  }, [laporanList, santriList, mySantriBinaan, user?.id, user?.nama]);
 
-  const approvedLaporans = laporanList.filter((l) => l.status === 'APPROVED');
+  const approvedLaporans = useMemo(() => {
+    return laporanList.filter((l) => l.status === 'APPROVED');
+  }, [laporanList]);
 
-  // Filter Laporan untuk Feed Seluruh Santri (Hanya yang sudah disetujui / APPROVED)
-  const filteredFeed = laporanList.filter((lap) => {
-    if (lap.status !== 'APPROVED') return false;
-    const matchCategory = feedFilter === 'ALL' || lap.kategori === feedFilter;
-    const matchSearch =
-      feedSearch === '' ||
-      lap.userNama.toLowerCase().includes(feedSearch.toLowerCase()) ||
-      lap.kegiatanNama.toLowerCase().includes(feedSearch.toLowerCase()) ||
-      (lap.userAsrama && lap.userAsrama.toLowerCase().includes(feedSearch.toLowerCase()));
-    return matchCategory && matchSearch;
-  });
+  // Filter Laporan untuk Feed Seluruh Santri (Hanya yang sudah disetujui / APPROVED) (Memoized)
+  const filteredFeed = useMemo(() => {
+    const search = feedSearch.trim().toLowerCase();
+    return laporanList.filter((lap) => {
+      if (lap.status !== 'APPROVED') return false;
+      const matchCategory = feedFilter === 'ALL' || lap.kategori === feedFilter;
+      const matchSearch =
+        search === '' ||
+        lap.userNama.toLowerCase().includes(search) ||
+        lap.kegiatanNama.toLowerCase().includes(search) ||
+        (lap.userAsrama && lap.userAsrama.toLowerCase().includes(search));
+      return matchCategory && matchSearch;
+    });
+  }, [laporanList, feedFilter, feedSearch]);
 
   const handleOpenApprove = (lap: any) => {
     const santri =

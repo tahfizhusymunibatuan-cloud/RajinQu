@@ -41,83 +41,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // 4. Buat Master Kegiatan Harian Liburan Standar
-    const defaultKegiatan = [
-      {
-        nama: 'Sholat Subuh Berjamaah di Masjid',
-        deskripsi: 'Wajib sholat Subuh berjamaah di masjid terdekat / musholla bersama keluarga.',
-        kategori: KategoriKegiatan.IBADAH,
-        poin: 15,
-        icon: 'Sunrise',
-        isWajib: true,
-        isTimeRestricted: true,
-        jamMulai: '04:15',
-        jamSelesai: '05:45',
-        targetWaktu: '04:15 - 05:45 WIB',
-        pondokId: pondok.id,
-      },
-      {
-        nama: "Muroja'ah & Ziyadah Al-Qur'an (1 Juz / 5 Lembar)",
-        deskripsi: "Menjaga hafalan Al-Qur'an harian minimal 5 lembar atau 1 juz.",
-        kategori: KategoriKegiatan.IBADAH,
-        poin: 20,
-        icon: 'BookOpen',
-        isWajib: true,
-        isTimeRestricted: false,
-        targetWaktu: 'Bebas / Kapan Saja',
-        pondokId: pondok.id,
-      },
-      {
-        nama: 'Sholat Dhuha & Dzikir Pagi',
-        deskripsi: "Melaksanakan sholat Dhuha minimal 2 rakaat dan membaca Al-Ma'tsurat / dzikir pagi.",
-        kategori: KategoriKegiatan.IBADAH,
-        poin: 10,
-        icon: 'SunMedium',
-        isWajib: true,
-        isTimeRestricted: true,
-        jamMulai: '06:30',
-        jamSelesai: '11:00',
-        targetWaktu: '06:30 - 11:00 WIB',
-        pondokId: pondok.id,
-      },
-      {
-        nama: 'Khidmah: Membantu Orang Tua di Rumah',
-        deskripsi: 'Membantu pekerjaan rumah tangga (membersihkan rumah, memasak, atau belanja).',
-        kategori: KategoriKegiatan.MANDIRI,
-        poin: 15,
-        icon: 'HeartHandshake',
-        isWajib: true,
-        isTimeRestricted: false,
-        targetWaktu: 'Bebas / Kapan Saja',
-        pondokId: pondok.id,
-      },
-      {
-        nama: 'Sholat Rawatib & Dzikir Ba\'da Sholat',
-        deskripsi: 'Menjaga sholat sunnah rawatib qobliyah & ba\'diyah serta dzikir harian.',
-        kategori: KategoriKegiatan.IBADAH,
-        poin: 10,
-        icon: 'Sparkles',
-        isWajib: false,
-        isTimeRestricted: false,
-        targetWaktu: 'Bebas / Kapan Saja',
-        pondokId: pondok.id,
-      },
-      {
-        nama: 'Membaca Kitab / Buku Bermanfaat (30 Menit)',
-        deskripsi: 'Membaca kitab kuning, buku motivasi, sirah nabawiyah, atau pelajaran pondok.',
-        kategori: KategoriKegiatan.BELAJAR,
-        poin: 10,
-        icon: 'GraduationCap',
-        isWajib: false,
-        isTimeRestricted: false,
-        targetWaktu: 'Bebas / Kapan Saja',
-        pondokId: pondok.id,
-      },
-    ];
-
-    for (const keg of defaultKegiatan) {
-      await prisma.kegiatan.create({ data: keg });
-    }
+    // 4. Periode Liburan Aktif Resmi (0 Kegiatan Dummy)
+    const defaultKegiatan: any[] = [];
 
     // 5. Buat Periode Liburan Aktif
     const periode = await prisma.periodeLiburan.create({
@@ -149,4 +74,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: Request) {
+  return POST(request);
 }
