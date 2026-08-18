@@ -40,6 +40,7 @@ import {
   Newspaper,
   Save,
   Lock,
+  KeyRound,
   Phone,
   Layers,
   GraduationCap,
@@ -355,20 +356,21 @@ export default function PengurusPage() {
     showToast('💬 Komentar bimbingan berhasil diposting!');
   };
 
-  // Update Profil Musyrif
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  // Update Password Musyrif
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    updateUser(user.id, {
-      nama: profileForm.nama.trim(),
-      username: profileForm.username.trim(),
-      noHp: profileForm.noHp.trim(),
+    if (!profileForm.password.trim()) {
+      showToast('⚠️ Password / PIN tidak boleh kosong.');
+      return;
+    }
+
+    await updateUser(user.id, {
       password: profileForm.password.trim(),
-      asrama: profileForm.asrama.trim(),
     });
 
-    showToast('✅ Profil & Pengaturan Akun berhasil diperbarui!');
+    showToast('✅ Password / PIN Musyrif berhasil diperbarui!');
   };
 
   const handleMusyrifAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -724,12 +726,14 @@ export default function PengurusPage() {
 
                 const activitiesStatus = kegiatanList.map((keg) => {
                   const lap = santriLaporans.find(
-                    (l) => (l.kegiatanId === keg.id || l.kegiatanNama === keg.nama) && l.status !== 'REJECTED'
+                    (l) => (l.kegiatanId === keg.id || l.kegiatanNama === keg.nama)
                   );
 
                   return {
                     kegiatan: keg,
-                    isDone: !!lap,
+                    isDone: lap?.status === 'APPROVED',
+                    isPending: lap?.status === 'PENDING',
+                    isRejected: lap?.status === 'REJECTED',
                     laporan: lap,
                   };
                 });
@@ -810,20 +814,24 @@ export default function PengurusPage() {
                           Daftar Kepatuhan Kegiatan ({filterDate}):
                         </div>
 
-                        {activitiesStatus.map(({ kegiatan, isDone, laporan }) => (
+                        {activitiesStatus.map(({ kegiatan, isDone, isPending, isRejected, laporan }) => (
                           <div
                             key={kegiatan.id}
                             className={`p-2 rounded-xl border text-xs flex items-center justify-between ${
                               isDone
                                 ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-                                : 'bg-rose-50/60 border-rose-200 text-rose-950'
+                                : isPending
+                                ? 'bg-amber-50/60 border-amber-200 text-amber-950'
+                                : isRejected
+                                ? 'bg-rose-50/60 border-rose-200 text-rose-950'
+                                : 'bg-slate-50/60 border-slate-200 text-slate-700'
                             }`}
                           >
                             <div className="flex items-center gap-2">
                               <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                                isDone ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                                isDone ? 'bg-emerald-500 text-white' : isPending ? 'bg-amber-500 text-white' : isRejected ? 'bg-rose-500 text-white' : 'bg-slate-300 text-slate-600'
                               }`}>
-                                {isDone ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                {isDone ? <Check className="w-3 h-3" /> : isPending ? <Clock className="w-3 h-3" /> : <X className="w-3 h-3" />}
                               </div>
                               <div>
                                 <div className="font-bold text-[11px] flex items-center gap-1.5">
@@ -844,7 +852,7 @@ export default function PengurusPage() {
                               {isDone ? (
                                 <div className="flex items-center gap-1">
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                                    {laporan?.statusWaktu === 'TERLAMBAT' ? '⏳ Telat' : '✓ Tepat'}
+                                    ✓ Disetujui
                                   </span>
                                   {laporan?.fotoUrl && (
                                     <button
@@ -857,9 +865,29 @@ export default function PengurusPage() {
                                     </button>
                                   )}
                                 </div>
+                              ) : isPending ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                                    ⏳ Menunggu Validasi
+                                  </span>
+                                  {laporan?.fotoUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewFotoUrl({ url: laporan.fotoUrl, title: `${santri.nama} - ${kegiatan.nama}` })}
+                                      className="p-1 text-teal-700 hover:bg-teal-100 rounded-lg"
+                                      title="Intip Foto Selfie"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : isRejected ? (
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                                  ❌ Ditolak (Revisi)
+                                </span>
                               ) : (
-                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
-                                  Belum Dikerjakan
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                  Belum Lapor
                                 </span>
                               )}
                             </div>
@@ -1014,12 +1042,21 @@ export default function PengurusPage() {
                       {/* Action Bar (Like & Comment) */}
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                         <button
-                          onClick={() => toggleLike(lap.id, user?.id || 'musyrif')}
+                          type="button"
+                          onClick={() => toggleLike(lap.id, user?.id)}
                           className={`flex items-center gap-1.5 text-xs font-bold transition ${
-                            lap.isLikedByUser ? 'text-rose-600' : 'text-slate-500 hover:text-slate-800'
+                            (lap.isLikedByUser || (lap.likedUserIds && user && lap.likedUserIds.includes(user.id)))
+                              ? 'text-rose-600'
+                              : 'text-slate-500 hover:text-slate-800'
                           }`}
                         >
-                          <Heart className={`w-4 h-4 ${lap.isLikedByUser ? 'fill-rose-600' : ''}`} />
+                          <Heart
+                            className={`w-4 h-4 ${
+                              (lap.isLikedByUser || (lap.likedUserIds && user && lap.likedUserIds.includes(user.id)))
+                                ? 'fill-rose-600 text-rose-600'
+                                : ''
+                            }`}
+                          />
                           <span>{lap.likesCount} Suka</span>
                         </button>
 
@@ -1186,57 +1223,44 @@ export default function PengurusPage() {
               </div>
             </div>
 
-            {/* Form Edit Profil & Ganti PIN */}
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 pb-2 border-b border-slate-100">
-                <Shield className="w-4 h-4 text-teal-700" />
-                <span>Pengaturan Profil & Akun Login</span>
+            {/* Informasi Identitas Musyrif Terkunci (Read-Only) */}
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                  <Shield className="w-4 h-4 text-teal-700" />
+                  <span>Informasi Akun Pembina</span>
+                </div>
+                <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Dikelola Super Admin</span>
+                </span>
               </div>
 
-              <form onSubmit={handleUpdateProfile} className="space-y-2.5 text-xs">
+              <div className="space-y-2 text-xs">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nama Lengkap & Gelar</label>
-                  <input
-                    type="text"
-                    required
-                    value={profileForm.nama}
-                    onChange={(e) => setProfileForm({ ...profileForm, nama: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
-                  />
+                  <span className="text-[10px] text-slate-400 font-semibold block">Nama Lengkap & Gelar</span>
+                  <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 flex items-center justify-between">
+                    <span>{user?.nama}</span>
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Username Login</label>
-                    <input
-                      type="text"
-                      required
-                      value={profileForm.username}
-                      onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                    />
+                    <span className="text-[10px] text-slate-400 font-semibold block">Username Login</span>
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 flex items-center justify-between">
+                      <span>{user?.username}</span>
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Password / PIN</label>
-                    <input
-                      type="text"
-                      required
-                      value={profileForm.password}
-                      onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">No. WhatsApp Musyrif</label>
-                  <input
-                    type="text"
-                    required
-                    value={profileForm.noHp}
-                    onChange={(e) => setProfileForm({ ...profileForm, noHp: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                  />
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block">No. WhatsApp</span>
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 flex items-center justify-between">
+                      <span>{user?.noHp}</span>
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
@@ -1248,12 +1272,40 @@ export default function PengurusPage() {
                   </p>
                 </div>
 
+                <p className="text-[10px] text-slate-400 italic">
+                  * Nama, Username, dan No. WhatsApp hanya dapat diperbarui melalui Super Admin pondok.
+                </p>
+              </div>
+            </div>
+
+            {/* Formulir Ganti Password / PIN Musyrif */}
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 pb-2 border-b border-slate-100">
+                <KeyRound className="w-4 h-4 text-amber-500" />
+                <span>Ganti Password / PIN Login Musyrif</span>
+              </div>
+
+              <form onSubmit={handleUpdateProfile} className="space-y-2.5 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Password / PIN Baru
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Masukkan password atau PIN baru..."
+                    value={profileForm.password}
+                    onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
+                  />
+                </div>
+
                 <button
                   type="submit"
                   className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl shadow mt-1 flex items-center justify-center gap-1.5 transition active:scale-95"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Simpan Perubahan Profil</span>
+                  <span>Simpan Password Baru</span>
                 </button>
               </form>
             </div>

@@ -13,6 +13,13 @@ export async function GET() {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        likes: true,
+        komentars: {
+          include: { user: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
 
     const allUsers: any[] = await (prisma as any).user.findMany().catch(() => []);
@@ -23,6 +30,17 @@ export async function GET() {
       const santri = allUsers.find((u) => u.id === lap.userId);
       const kegiatan = allKegiatan.find((k) => k.id === lap.kegiatanId);
       const kelompok = allKelompok.find((k) => k.id === santri?.kelompokId);
+
+      const comments = (lap.komentars || []).map((c: any) => ({
+        id: c.id,
+        nama: c.user?.nama || 'Pengguna',
+        avatar: c.user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        role: c.user?.role || 'SANTRI',
+        isi: c.isi,
+        waktu: new Date(c.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      }));
+
+      const likedUserIds = (lap.likes || []).map((l: any) => l.userId);
 
       return {
         id: lap.id,
@@ -44,9 +62,10 @@ export async function GET() {
         waktuLaporWIB: lap.waktuLaporWIB || new Date(lap.createdAt).toLocaleTimeString('id-ID'),
         catatanPengurus: lap.catatanPengurus || undefined,
         createdAt: lap.createdAt ? new Date(lap.createdAt).toISOString() : new Date().toISOString(),
-        likesCount: 0,
+        likesCount: lap.likes ? lap.likes.length : 0,
         isLikedByUser: false,
-        comments: [],
+        likedUserIds,
+        comments,
       };
     });
 

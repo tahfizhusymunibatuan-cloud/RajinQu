@@ -73,6 +73,7 @@ export interface MockLaporan {
   createdAt: string;
   likesCount: number;
   isLikedByUser: boolean;
+  likedUserIds?: string[];
   comments: {
     id: string;
     nama: string;

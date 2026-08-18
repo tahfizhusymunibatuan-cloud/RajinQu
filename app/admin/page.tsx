@@ -323,16 +323,23 @@ export default function AdminPage() {
       alert('Harap isi semua kolom data santri.');
       return;
     }
-    addSantri(santriForm);
+    const chosenKel = kelompokList.find((k) => k.id === santriForm.kelompokId);
+    const resolvedMusyrifId = chosenKel?.musyrifId || santriForm.musyrifId || '';
+
+    addSantri({
+      ...santriForm,
+      kelompokId: santriForm.kelompokId || undefined,
+      musyrifId: resolvedMusyrifId || undefined,
+    });
     setIsAddSantriOpen(false);
     setSantriForm({
       nama: '',
       username: '',
       noHp: '',
       password: '123',
-      asrama: 'Kelas 4 TMI / Asrama Abu Bakar',
-      musyrifId: musyrifList[0]?.id || 'user-musyrif-1',
-      kelompokId: kelompokList[0]?.id || '',
+      asrama: '',
+      musyrifId: '',
+      kelompokId: '',
     });
     showNotification('✅ Akun Santri berhasil didaftarkan & disambungkan ke Kelompok / Musyrif!');
   };
@@ -1693,7 +1700,12 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">No. WhatsApp Santri / Wali</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">No. WhatsApp Santri / Wali</label>
+                  <span className="text-[10px] text-teal-700 font-semibold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                    Bisa nomor sama untuk saudara
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
@@ -1702,6 +1714,9 @@ export default function AdminPage() {
                   onChange={(e) => setSantriForm({ ...santriForm, noHp: e.target.value })}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  1 nomor WhatsApp dapat digunakan oleh lebih dari 1 akun santri (misal: kakak-beradik menggunakan nomor HP orang tua yang sama).
+                </p>
               </div>
 
               {/* DROPDOWN KAITKAN KE KELOMPOK */}
@@ -2392,13 +2407,17 @@ export default function AdminPage() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const chosenKel = kelompokList.find((k) => k.id === editSantriForm.kelompokId);
+                const resolvedMusyrifId = chosenKel?.musyrifId || editSantriForm.musyrifId || '';
+
                 updateUser(editSantriForm.id, {
                   nama: editSantriForm.nama.trim(),
                   username: editSantriForm.username.trim(),
                   noHp: editSantriForm.noHp.trim(),
                   password: editSantriForm.password.trim(),
                   asrama: editSantriForm.asrama.trim(),
-                  musyrifId: editSantriForm.musyrifId,
+                  musyrifId: resolvedMusyrifId || undefined,
+                  kelompokId: editSantriForm.kelompokId || undefined,
                 });
                 if (editSantriForm.kelompokId) {
                   assignSantriToKelompok(editSantriForm.id, editSantriForm.kelompokId);

@@ -245,6 +245,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           kelompokId: data.kelompokId || null,
         }),
       });
+
+      if (data.kelompokId) {
+        await fetch('/api/kelompok', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.kelompokId,
+            musyrifId: newMusyrifId,
+          }),
+        });
+      }
     } catch (e) {
       console.error('Failed to sync new musyrif to DB:', e);
     }
@@ -419,6 +430,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     });
 
     saveUsers(updatedUsers);
+
+    if (typeof window !== 'undefined' && updatedUserObj) {
+      const currentAuth = localStorage.getItem('rajinqu_auth_user');
+      if (currentAuth) {
+        try {
+          const parsed = JSON.parse(currentAuth);
+          if (parsed.id === userId) {
+            localStorage.setItem('rajinqu_auth_user', JSON.stringify(updatedUserObj));
+            localStorage.setItem('rajinqu_session', JSON.stringify(updatedUserObj));
+          }
+        } catch (e) {}
+      }
+    }
 
     try {
       await fetch('/api/users', {
@@ -950,46 +974,81 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const toggleLike = (laporanId: string) => {
+  const toggleLike = async (laporanId: string, userId?: string) => {
+    const targetUserId = userId || 'user-admin';
     const updated = laporanList.map((lap) => {
       if (lap.id === laporanId) {
-        const isLiked = lap.isLikedByUser;
+        const isLiked = lap.isLikedByUser || (lap.likedUserIds && lap.likedUserIds.includes(targetUserId));
+        const currentLikedUsers = lap.likedUserIds || [];
+        const newLikedUsers = isLiked
+          ? currentLikedUsers.filter((uid) => uid !== targetUserId)
+          : [...currentLikedUsers, targetUserId];
+
         return {
           ...lap,
           isLikedByUser: !isLiked,
-          likesCount: isLiked ? lap.likesCount - 1 : lap.likesCount + 1,
+          likesCount: isLiked ? Math.max(0, lap.likesCount - 1) : lap.likesCount + 1,
+          likedUserIds: newLikedUsers,
         };
       }
       return lap;
     });
     saveLaporan(updated);
+
+    try {
+      await fetch('/api/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          laporanId,
+          userId: targetUserId,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to persist like in DB:', e);
+    }
   };
 
-  const addComment = (laporanId: string, user: MockUser, text: string) => {
+  const addComment = async (laporanId: string, user: MockUser, text: string) => {
     if (!text.trim()) return;
     const now = new Date();
     const waktuStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} WIB`;
+    const newCommentId = `c-${Date.now()}`;
+
+    const newCommentObj = {
+      id: newCommentId,
+      nama: user.nama,
+      avatar: user.avatarUrl,
+      role: user.role,
+      isi: text.trim(),
+      waktu: waktuStr,
+    };
 
     const updated = laporanList.map((lap) => {
       if (lap.id === laporanId) {
         return {
           ...lap,
-          comments: [
-            ...lap.comments,
-            {
-              id: `c-${Date.now()}`,
-              nama: user.nama,
-              avatar: user.avatarUrl,
-              role: user.role,
-              isi: text.trim(),
-              waktu: waktuStr,
-            },
-          ],
+          comments: [...(lap.comments || []), newCommentObj],
         };
       }
       return lap;
     });
     saveLaporan(updated);
+
+    try {
+      await fetch('/api/komentar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newCommentId,
+          laporanId,
+          userId: user.id,
+          isi: text.trim(),
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to persist comment in DB:', e);
+    }
   };
 
   const broadcastReminder = async (santriId: string) => {

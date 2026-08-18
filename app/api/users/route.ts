@@ -69,7 +69,10 @@ export async function POST(request: Request) {
         ? role
         : 'SANTRI';
 
-    let resultUser = {
+    let finalMusyrifId: string | null = musyrifId || null;
+    let finalKelompokId: string | null = kelompokId || null;
+
+    let resultUser: any = {
       id: id || `user-${Date.now()}`,
       username: cleanUsername,
       noHp: cleanNoHp,
@@ -77,8 +80,8 @@ export async function POST(request: Request) {
       nama: cleanNama,
       role: validRole,
       avatarUrl: avatarUrl || undefined,
-      musyrifId: null,
-      kelompokId: null,
+      musyrifId: finalMusyrifId,
+      kelompokId: finalKelompokId,
       totalPoin: 0,
     };
 
@@ -94,7 +97,32 @@ export async function POST(request: Request) {
         }).catch(() => null);
       }
 
-      // 2. Cek apakah user sudah ada berdasarkan username
+      // 2. Jika santri memilih kelompok tapi belum memilih musyrif, ambil musyrif dari kelompok
+      if (validRole === 'SANTRI' && finalKelompokId) {
+        const kel = await (prisma as any).kelompok.findUnique({
+          where: { id: finalKelompokId },
+        }).catch(() => null);
+        if (kel?.musyrifId) {
+          finalMusyrifId = kel.musyrifId;
+        }
+      }
+
+      // 3. Validasi foreign key musyrifId dan kelompokId
+      if (finalMusyrifId) {
+        const musExists = await (prisma as any).user.findUnique({
+          where: { id: finalMusyrifId },
+        }).catch(() => null);
+        if (!musExists) finalMusyrifId = null;
+      }
+
+      if (finalKelompokId) {
+        const kelExists = await (prisma as any).kelompok.findUnique({
+          where: { id: finalKelompokId },
+        }).catch(() => null);
+        if (!kelExists) finalKelompokId = null;
+      }
+
+      // 4. Cek apakah user sudah ada berdasarkan username
       const existingUser = await (prisma as any).user.findUnique({
         where: { username: cleanUsername },
       }).catch(() => null);
@@ -108,6 +136,8 @@ export async function POST(request: Request) {
             nama: cleanNama,
             role: validRole,
             avatarUrl: avatarUrl || existingUser.avatarUrl,
+            musyrifId: finalMusyrifId,
+            kelompokId: finalKelompokId,
           },
         });
       } else {
@@ -121,9 +151,25 @@ export async function POST(request: Request) {
             role: validRole,
             avatarUrl: avatarUrl || undefined,
             pondokId: pondok?.id || null,
+            musyrifId: finalMusyrifId,
+            kelompokId: finalKelompokId,
             totalPoin: 0,
           },
         });
+      }
+
+      // 5. Jika Musyrif baru ditugaskan ke kelompok, hubungkan kelompok dan santri di dalamnya
+      if (validRole === 'MUSYRIF' && kelompokId) {
+        await (prisma as any).kelompok.update({
+          where: { id: kelompokId },
+          data: { musyrifId: resultUser.id },
+        }).catch(() => {});
+
+        // Update semua santri di kelompok tersebut agar dibina oleh musyrif baru ini
+        await (prisma as any).user.updateMany({
+          where: { kelompokId },
+          data: { musyrifId: resultUser.id },
+        }).catch(() => {});
       }
     } catch (dbErr: any) {
       console.warn('DB write warning (handled):', dbErr?.message);
@@ -146,9 +192,27 @@ export async function PUT(request: Request) {
       return NextResponse.json({ success: false, error: 'User ID is required' }, { status: 400 });
     }
 
-    let updatedUser: any = { id, username, noHp, password, nama, role };
+    let updatedUser: any = { id, username, noHp, password, nama, role, musyrifId, kelompokId };
 
     try {
+      let finalMusyrifId = musyrifId !== undefined ? (musyrifId || null) : undefined;
+      let finalKelompokId = kelompokId !== undefined ? (kelompokId || null) : undefined;
+
+      // Validasi keberadaan musyrif & kelompok jika diisi
+      if (finalMusyrifId) {
+        const musExists = await (prisma as any).user.findUnique({
+          where: { id: finalMusyrifId },
+        }).catch(() => null);
+        if (!musExists) finalMusyrifId = null;
+      }
+
+      if (finalKelompokId) {
+        const kelExists = await (prisma as any).kelompok.findUnique({
+          where: { id: finalKelompokId },
+        }).catch(() => null);
+        if (!kelExists) finalKelompokId = null;
+      }
+
       updatedUser = await (prisma as any).user.update({
         where: { id },
         data: {
@@ -159,8 +223,23 @@ export async function PUT(request: Request) {
           ...(role ? { role: role } : {}),
           ...(avatarUrl !== undefined ? { avatarUrl } : {}),
           ...(totalPoin !== undefined ? { totalPoin } : {}),
+          ...(finalMusyrifId !== undefined ? { musyrifId: finalMusyrifId } : {}),
+          ...(finalKelompokId !== undefined ? { kelompokId: finalKelompokId } : {}),
         },
       });
+
+      // Jika Musyrif dihubungkan ke kelompok baru
+      if (role === 'MUSYRIF' && kelompokId) {
+        await (prisma as any).kelompok.update({
+          where: { id: kelompokId },
+          data: { musyrifId: id },
+        }).catch(() => {});
+
+        await (prisma as any).user.updateMany({
+          where: { kelompokId },
+          data: { musyrifId: id },
+        }).catch(() => {});
+      }
     } catch (dbErr: any) {
       console.warn('DB update warning (handled):', dbErr?.message);
     }

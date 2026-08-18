@@ -40,6 +40,9 @@ import {
   ExternalLink,
   Check,
   Layers,
+  Lock,
+  KeyRound,
+  Shield,
 } from 'lucide-react';
 import {
   BarChart,
@@ -51,7 +54,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { MOCK_STATISTIK_MINGGUAN, MOCK_REWARD_PERIODE, MockKegiatan, MockLaporan } from '@/lib/mock-data';
-import { getWIBTimeString, checkWaktuKegiatan } from '@/lib/time-wib';
+import { getWIBTimeString, checkWaktuKegiatan, getSantriDailyActivityStatus, getTodayWIBDateString } from '@/lib/time-wib';
 import { PrayerCountdownWidget } from '@/components/prayer-countdown-widget';
 import VacationCountdownBanner from '@/components/VacationCountdownBanner';
 import { calculateActivityCountdown } from '@/lib/prayer-times';
@@ -95,6 +98,14 @@ export default function SantriPage() {
   const [isCapturingGps, setIsCapturingGps] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadSuccessAlert, setUploadSuccessAlert] = useState(false);
+
+  // State Ganti Password / PIN Santri
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // State Modal Konfirmasi WhatsApp Manual ke Musyrif
   const [waConfirmModal, setWaConfirmModal] = useState<{
@@ -358,7 +369,29 @@ export default function SantriPage() {
   };
 
   const handleOpenUpload = (kegiatan?: MockKegiatan) => {
-    setSelectedKegiatan(kegiatan || kegiatanList[0]);
+    let targetKeg = kegiatan;
+
+    // Jika kegiatan ditentukan secara spesifik
+    if (targetKeg) {
+      const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, targetKeg.id);
+      if (dailyStatus.isApproved) {
+        alert(`✅ Laporan kegiatan "${targetKeg.nama}" hari ini sudah selesai dan disetujui oleh Musyrif.`);
+        return;
+      }
+      if (dailyStatus.isPending) {
+        alert(`⏳ Laporan kegiatan "${targetKeg.nama}" hari ini sedang dalam proses peninjauan oleh Musyrif.`);
+        return;
+      }
+    } else {
+      // Jika dipicu dari tombol umum "Upload Kegiatan Baru", cari kegiatan yang belum selesai
+      const availableKeg = kegiatanList.find((k) => {
+        const s = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
+        return s.canSubmit;
+      });
+      targetKeg = availableKeg || kegiatanList[0];
+    }
+
+    setSelectedKegiatan(targetKeg);
     setPhotoPreview(null);
     setCatatanSantri('');
     setGpsLocation(null);
@@ -448,8 +481,21 @@ export default function SantriPage() {
   const handleSubmitLaporan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedKegiatan) return;
+
+    const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, selectedKegiatan.id);
+    if (dailyStatus.isApproved) {
+      alert(`✅ Laporan untuk kegiatan "${selectedKegiatan.nama}" hari ini sudah disetujui. Tidak dapat lapor ganda.`);
+      setIsUploadModalOpen(false);
+      return;
+    }
+    if (dailyStatus.isPending) {
+      alert(`⏳ Laporan untuk kegiatan "${selectedKegiatan.nama}" hari ini sedang menunggu validasi musyrif.`);
+      setIsUploadModalOpen(false);
+      return;
+    }
+
     if (!photoPreview) {
-      alert('Harap ambil atau upload foto bukti kegiatan terlebih dahulu.');
+      alert('Harap ambil foto live kegiatan terlebih dahulu.');
       return;
     }
 
@@ -527,6 +573,43 @@ export default function SantriPage() {
     if (text && user) {
       addComment(laporanId, user, text);
       setCommentInput({ ...commentInput, [laporanId]: '' });
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+
+    const { newPassword, confirmPassword } = passwordForm;
+    if (!newPassword.trim()) {
+      setPasswordMsg({ type: 'error', text: 'Password / PIN baru tidak boleh kosong.' });
+      return;
+    }
+
+    if (newPassword.trim().length < 3) {
+      setPasswordMsg({ type: 'error', text: 'Password / PIN minimal 3 karakter.' });
+      return;
+    }
+
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setPasswordMsg({ type: 'error', text: 'Konfirmasi Password / PIN tidak cocok.' });
+      return;
+    }
+
+    if (!currentSantriUser?.id) return;
+
+    setIsUpdatingPassword(true);
+    try {
+      await updateUser(currentSantriUser.id, {
+        password: newPassword.trim(),
+      });
+      setPasswordMsg({ type: 'success', text: '✅ Password / PIN berhasil diperbarui!' });
+      setPasswordForm({ newPassword: '', confirmPassword: '' });
+      setTimeout(() => setPasswordMsg(null), 4000);
+    } catch (err) {
+      setPasswordMsg({ type: 'error', text: 'Gagal memperbarui password.' });
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -785,11 +868,21 @@ export default function SantriPage() {
                         <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <button
-                              onClick={() => toggleLike(lap.id, user?.id || 'guest')}
-                              className={`flex items-center gap-1.5 text-xs font-semibold transition ${lap.isLikedByUser ? 'text-rose-500' : 'text-slate-500 hover:text-slate-700'
-                                }`}
+                              type="button"
+                              onClick={() => toggleLike(lap.id, user?.id)}
+                              className={`flex items-center gap-1.5 text-xs font-semibold transition ${
+                                (lap.isLikedByUser || (lap.likedUserIds && user && lap.likedUserIds.includes(user.id)))
+                                  ? 'text-rose-500 font-bold'
+                                  : 'text-slate-500 hover:text-slate-700'
+                              }`}
                             >
-                              <Heart className={`w-4 h-4 ${lap.isLikedByUser ? 'fill-rose-500' : ''}`} />
+                              <Heart
+                                className={`w-4 h-4 ${
+                                  (lap.isLikedByUser || (lap.likedUserIds && user && lap.likedUserIds.includes(user.id)))
+                                    ? 'fill-rose-500 text-rose-500'
+                                    : ''
+                                }`}
+                              />
                               <span>{lap.likesCount}</span>
                             </button>
 
@@ -866,36 +959,66 @@ export default function SantriPage() {
             {/* Widget Jadwal Sholat & Countdown Singkat */}
             <PrayerCountdownWidget compact kegiatanList={kegiatanList} onOpenUpload={handleOpenUpload} />
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">Target Harian Santri</h2>
-                <p className="text-xs text-slate-500">Selesaikan seluruh target untuk reward maksimal</p>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
-                  4 / {kegiatanList.length} Selesai
-                </span>
-              </div>
-            </div>
+            {/* Real Counter Status Target Harian */}
+            {(() => {
+              const approvedCountToday = kegiatanList.filter((k) => {
+                const s = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
+                return s.isApproved;
+              }).length;
+
+              return (
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800">Target Harian Santri</h2>
+                    <p className="text-xs text-slate-500">Selesaikan seluruh target untuk reward maksimal</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+                      {approvedCountToday} / {kegiatanList.length} Selesai
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="space-y-2.5">
-              {kegiatanList.map((keg, idx) => {
-                // Dummy status: 3 kegiatan pertama sudah selesai
-                const isCompleted = idx < 3;
+              {kegiatanList.map((keg) => {
+                const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, keg.id);
+                const isApproved = dailyStatus.isApproved;
+                const isPending = dailyStatus.isPending;
+                const isRejected = dailyStatus.isRejected;
+                const lapRef = dailyStatus.laporan;
 
                 return (
                   <div
                     key={keg.id}
-                    className={`bg-white rounded-2xl p-3.5 border transition ${isCompleted ? 'border-emerald-200 bg-emerald-50/20' : 'border-slate-200 hover:border-teal-300'
-                      } shadow-sm`}
+                    className={`bg-white rounded-2xl p-3.5 border transition shadow-sm ${
+                      isApproved
+                        ? 'border-emerald-300 bg-emerald-50/25'
+                        : isPending
+                        ? 'border-amber-300 bg-amber-50/25'
+                        : isRejected
+                        ? 'border-rose-300 bg-rose-50/25'
+                        : 'border-slate-200 hover:border-teal-300'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                            isApproved
+                              ? 'bg-emerald-100 border-emerald-300'
+                              : isPending
+                              ? 'bg-amber-100 border-amber-300'
+                              : isRejected
+                              ? 'bg-rose-100 border-rose-300'
+                              : 'bg-slate-100 border-slate-200'
+                          }`}
+                        >
                           {renderKegiatanIcon(keg.icon)}
                         </div>
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-xs font-bold text-slate-800">{keg.nama}</span>
                             {keg.isWajib && (
                               <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.2 rounded border border-rose-200">
@@ -909,14 +1032,15 @@ export default function SantriPage() {
                                 const cd = calculateActivityCountdown(keg.jamMulai, keg.jamSelesai);
                                 return (
                                   <span
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${cd.status === 'SEDANG_DIBUKA'
-                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                      : cd.status === 'SEGERA_BERAKHIR'
+                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${
+                                      cd.status === 'SEDANG_DIBUKA'
+                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                        : cd.status === 'SEGERA_BERAKHIR'
                                         ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                         : cd.status === 'BERAKHIR'
-                                          ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                          : 'bg-slate-100 text-slate-600 border-slate-200'
-                                      }`}
+                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                    }`}
                                   >
                                     <Clock className="w-3 h-3 text-slate-500" />
                                     <span>{keg.targetWaktu}</span>
@@ -930,26 +1054,53 @@ export default function SantriPage() {
                                 <span>♾️ Waktu Fleksibel</span>
                               </span>
                             )}
-                            <span className="text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">+{keg.poin} Poin</span>
+                            <span className="text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                              +{keg.poin} Poin
+                            </span>
                           </div>
+
+                          {/* Catatan penolakan jika REJECTED */}
+                          {isRejected && lapRef?.catatanPengurus && (
+                            <div className="mt-1.5 p-1.5 bg-rose-100/70 border border-rose-200 text-rose-900 rounded-lg text-[10px]">
+                              <b>Catatan Musyrif:</b> {lapRef.catatanPengurus}
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Tombol Aksi */}
-                      {isCompleted ? (
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-100/60 px-2.5 py-1 rounded-xl shrink-0">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Selesai</span>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleOpenUpload(keg)}
-                          className="flex items-center gap-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 shrink-0 transition"
-                        >
-                          <Camera className="w-3.5 h-3.5" />
-                          <span>Lapor</span>
-                        </button>
-                      )}
+                      {/* Tombol Aksi Sesuai Status */}
+                      <div className="shrink-0">
+                        {isApproved ? (
+                          <div className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>✓ Selesai</span>
+                          </div>
+                        ) : isPending ? (
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                            <Clock3 className="w-3.5 h-3.5 text-amber-700" />
+                            <span>⏳ Menunggu</span>
+                          </div>
+                        ) : isRejected ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenUpload(keg)}
+                            className="flex items-center gap-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
+                            title="Lapor ulang / perbaiki laporan"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Lapor Ulang</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenUpload(keg)}
+                            className="flex items-center gap-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Lapor</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1344,6 +1495,120 @@ export default function SantriPage() {
                 {activePeriode?.deskripsiReward || 'Sertifikat penghargaan & beasiswa santri berprestasi.'}
               </p>
             </div>
+
+            {/* Informasi Identitas Akun Terkunci (Read-Only) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                  <Shield className="w-4 h-4 text-teal-700" />
+                  <span>Informasi Akun Terdaftar</span>
+                </div>
+                <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Dikelola Super Admin</span>
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block">Nama Lengkap</span>
+                  <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 flex items-center justify-between">
+                    <span>{currentSantriUser?.nama}</span>
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block">NIS / Username</span>
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 flex items-center justify-between">
+                      <span>{currentSantriUser?.username}</span>
+                      <Lock className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-semibold block">No. WhatsApp Wali</span>
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-800 flex items-center justify-between">
+                      <span>{currentSantriUser?.noHp}</span>
+                      <Lock className="w-3 h-3 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400 italic">
+                  * Nama, NIS, dan Nomor WhatsApp hanya dapat diperbarui melalui Super Admin pondok.
+                </p>
+              </div>
+            </div>
+
+            {/* Formulir Ganti Password / PIN Mandiri */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 border-b border-slate-100 pb-2">
+                <KeyRound className="w-4 h-4 text-amber-500" />
+                <span>Ganti Password / PIN Login Santri</span>
+              </div>
+
+              {passwordMsg && (
+                <div
+                  className={`p-2.5 rounded-xl text-xs font-semibold ${
+                    passwordMsg.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}
+                >
+                  {passwordMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleUpdatePassword} className="space-y-2.5 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Password / PIN Baru
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Masukkan password atau PIN baru..."
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Ulangi Password / PIN Baru
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Ketik ulang password baru..."
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isUpdatingPassword}
+                  className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-xs transition active:scale-95 flex items-center justify-center gap-1.5 mt-2"
+                >
+                  {isUpdatingPassword ? 'Menyimpan...' : 'Simpan Password Baru'}
+                </button>
+              </form>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              type="button"
+              onClick={logout}
+              className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Keluar dari Akun Santri</span>
+            </button>
           </div>
         )}
       </main>
@@ -1382,18 +1647,41 @@ export default function SantriPage() {
                   Pilih Kegiatan
                 </label>
                 <select
-                  value={selectedKegiatan?.id}
+                  value={selectedKegiatan?.id || ''}
                   onChange={(e) => {
                     const found = kegiatanList.find((k) => k.id === e.target.value);
-                    if (found) setSelectedKegiatan(found);
+                    if (found) {
+                      const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, found.id);
+                      if (dailyStatus.isApproved) {
+                        alert(`✅ Kegiatan "${found.nama}" sudah disetujui untuk hari ini.`);
+                        return;
+                      }
+                      if (dailyStatus.isPending) {
+                        alert(`⏳ Kegiatan "${found.nama}" sedang menunggu validasi Musyrif.`);
+                        return;
+                      }
+                      setSelectedKegiatan(found);
+                    }
                   }}
                   className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
                 >
-                  {kegiatanList.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.nama} (+{k.poin} Poin)
-                    </option>
-                  ))}
+                  {kegiatanList.map((k) => {
+                    const statusObj = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
+                    const isDone = statusObj.isApproved;
+                    const isPending = statusObj.isPending;
+                    const isRejected = statusObj.isRejected;
+
+                    return (
+                      <option
+                        key={k.id}
+                        value={k.id}
+                        disabled={isDone || isPending}
+                        className={isDone ? 'text-slate-400 bg-slate-100' : isRejected ? 'text-rose-700 font-bold' : ''}
+                      >
+                        {k.nama} (+{k.poin} Poin){isDone ? ' — ✓ Selesai (Terkunci)' : isPending ? ' — ⏳ Sedang Ditinjau' : isRejected ? ' — ❌ Perlu Lapor Ulang' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

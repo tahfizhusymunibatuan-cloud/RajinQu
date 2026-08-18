@@ -36,6 +36,13 @@ export async function GET() {
       (prisma as any).laporan.findMany({
         orderBy: { createdAt: 'desc' },
         take: 100, // Ambil 100 laporan terbaru untuk performa puncak
+        include: {
+          likes: true,
+          komentars: {
+            include: { user: true },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
       }).catch(() => []),
 
       (prisma as any).pondok.findFirst().catch(() => null),
@@ -61,6 +68,7 @@ export async function GET() {
         musyrifNama: mus?.nama || undefined,
         kelompokId: u.kelompokId || undefined,
         kelompokNama: kel?.nama || undefined,
+        asrama: u.asrama || kel?.nama || 'Pondok Pesantren PTQA Batuan',
         totalPoin: u.totalPoin || 0,
       };
     });
@@ -70,11 +78,11 @@ export async function GET() {
       id: k.id,
       nama: k.nama,
       deskripsi: k.deskripsi || '',
-      kategori: k.kategori || 'IBADAH',
-      poin: k.poin || 10,
+      kategori: k.kategori,
+      poin: k.poin,
       icon: k.icon || 'Sparkles',
-      isWajib: k.isWajib !== undefined ? k.isWajib : true,
-      isTimeRestricted: k.isTimeRestricted !== undefined ? k.isTimeRestricted : false,
+      isWajib: k.isWajib,
+      isTimeRestricted: k.isTimeRestricted,
       jamMulai: k.jamMulai || undefined,
       jamSelesai: k.jamSelesai || undefined,
       targetWaktu: k.targetWaktu || 'Bebas / Kapan Saja',
@@ -119,6 +127,17 @@ export async function GET() {
       const kegiatan = kegiatanResult.find((k: any) => k.id === lap.kegiatanId);
       const kelompok = kelompokResult.find((k: any) => k.id === santri?.kelompokId);
 
+      const comments = (lap.komentars || []).map((c: any) => ({
+        id: c.id,
+        nama: c.user?.nama || 'Pengguna',
+        avatar: c.user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        role: c.user?.role || 'SANTRI',
+        isi: c.isi,
+        waktu: new Date(c.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
+      }));
+
+      const likedUserIds = (lap.likes || []).map((l: any) => l.userId);
+
       return {
         id: lap.id,
         userId: lap.userId,
@@ -139,9 +158,10 @@ export async function GET() {
         waktuLaporWIB: lap.waktuLaporWIB || new Date(lap.createdAt).toLocaleTimeString('id-ID'),
         catatanPengurus: lap.catatanPengurus || undefined,
         createdAt: lap.createdAt ? new Date(lap.createdAt).toISOString() : new Date().toISOString(),
-        likesCount: 0,
+        likesCount: lap.likes ? lap.likes.length : 0,
         isLikedByUser: false,
-        comments: [],
+        likedUserIds,
+        comments,
       };
     });
 

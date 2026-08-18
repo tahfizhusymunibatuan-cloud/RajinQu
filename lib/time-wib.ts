@@ -91,3 +91,101 @@ export function checkWaktuKegiatan(
     };
   }
 }
+
+/**
+ * Mengembalikan tanggal hari ini dalam format YYYY-MM-DD sesuai zona waktu Asia/Jakarta (WIB)
+ */
+export function getTodayWIBDateString(): string {
+  const wib = getWIBDate();
+  const year = wib.getFullYear();
+  const month = (wib.getMonth() + 1).toString().padStart(2, '0');
+  const day = wib.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Mengecek status laporan santri pada hari ini untuk suatu kegiatan tertentu
+ */
+export function getSantriDailyActivityStatus(
+  laporanList: any[],
+  userId?: string,
+  userNama?: string,
+  kegiatanId?: string,
+  targetDateStr?: string
+): {
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'NONE';
+  laporan?: any;
+  canSubmit: boolean;
+  isApproved: boolean;
+  isPending: boolean;
+  isRejected: boolean;
+} {
+  const dateKey = targetDateStr || getTodayWIBDateString();
+
+  // Cari semua laporan santri untuk kegiatan ini pada hari yang ditentukan
+  const matchedLaporans = (laporanList || []).filter((lap) => {
+    const isUser = (userId && lap.userId === userId) || (userNama && lap.userNama === userNama);
+    if (!isUser) return false;
+    if (kegiatanId && lap.kegiatanId !== kegiatanId) return false;
+
+    // Normalisasi tanggal pembuatan laporan ke WIB YYYY-MM-DD
+    const lapDate = lap.createdAt ? new Date(lap.createdAt) : new Date();
+    const lapDateWIB = new Date(lapDate.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const lapYear = lapDateWIB.getFullYear();
+    const lapMonth = (lapDateWIB.getMonth() + 1).toString().padStart(2, '0');
+    const lapDay = lapDateWIB.getDate().toString().padStart(2, '0');
+    const lapDateStr = `${lapYear}-${lapMonth}-${lapDay}`;
+
+    return lapDateStr === dateKey;
+  });
+
+  // Prioritas 1: Jika ada yang APPROVED -> Berstatus APPROVED (Terkunci & Selesai)
+  const approvedLap = matchedLaporans.find((l) => l.status === 'APPROVED');
+  if (approvedLap) {
+    return {
+      status: 'APPROVED',
+      laporan: approvedLap,
+      canSubmit: false,
+      isApproved: true,
+      isPending: false,
+      isRejected: false,
+    };
+  }
+
+  // Prioritas 2: Jika ada yang PENDING -> Berstatus PENDING (Menunggu Validasi Musyrif)
+  const pendingLap = matchedLaporans.find((l) => l.status === 'PENDING');
+  if (pendingLap) {
+    return {
+      status: 'PENDING',
+      laporan: pendingLap,
+      canSubmit: false,
+      isApproved: false,
+      isPending: true,
+      isRejected: false,
+    };
+  }
+
+  // Prioritas 3: Jika ada yang REJECTED -> Berstatus REJECTED (Bisa Lapor Ulang)
+  const rejectedLap = matchedLaporans.find((l) => l.status === 'REJECTED');
+  if (rejectedLap) {
+    return {
+      status: 'REJECTED',
+      laporan: rejectedLap,
+      canSubmit: true,
+      isApproved: false,
+      isPending: false,
+      isRejected: true,
+    };
+  }
+
+  // Belum pernah lapor hari ini
+  return {
+    status: 'NONE',
+    laporan: undefined,
+    canSubmit: true,
+    isApproved: false,
+    isPending: false,
+    isRejected: false,
+  };
+}
+

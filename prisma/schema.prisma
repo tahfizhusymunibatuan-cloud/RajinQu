@@ -77,7 +77,7 @@ model PeriodeLiburan {
 model User {
   id           String      @id @default(cuid())
   username     String      @unique // Bisa berupa NIS atau Username unik
-  noHp         String      @unique // Nomor WA untuk notifikasi
+  noHp         String      // Nomor WA untuk notifikasi (Bisa digunakan oleh lebih dari 1 akun santri/wali)
   password     String      // Password / PIN default dari Admin
   nama         String
   role         Role        @default(SANTRI)
