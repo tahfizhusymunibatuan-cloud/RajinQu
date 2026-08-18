@@ -410,26 +410,76 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateUser = async (userId: string, data: Partial<MockUser>) => {
+    const existingUser = allUsers.find((u) => u.id === userId);
     let targetMusyrifNama: string | undefined = undefined;
-    if (data.musyrifId !== undefined) {
-      const targetMusyrif = allUsers.find((u) => u.id === data.musyrifId);
+
+    let resolvedMusyrifId = data.musyrifId !== undefined ? data.musyrifId : existingUser?.musyrifId;
+    let resolvedKelompokId = data.kelompokId !== undefined ? data.kelompokId : existingUser?.kelompokId;
+
+    // Jika kelompokId diisi/diubah namun musyrifId belum ditentukan, ambil musyrif penanggung jawab dari kelompok tsb
+    if (resolvedKelompokId && !data.musyrifId) {
+      const targetKel = kelompokList.find((k) => k.id === resolvedKelompokId);
+      if (targetKel?.musyrifId) {
+        resolvedMusyrifId = targetKel.musyrifId;
+      }
+    }
+
+    if (resolvedMusyrifId) {
+      const targetMusyrif = allUsers.find((u) => u.id === resolvedMusyrifId);
       targetMusyrifNama = targetMusyrif ? targetMusyrif.nama : 'Belum Ditugaskan';
     }
 
     let updatedUserObj: MockUser | null = null;
     const updatedUsers = allUsers.map((u) => {
       if (u.id === userId) {
+        let newKelompokNama = u.kelompokNama;
+        if (resolvedKelompokId !== undefined) {
+          const kObj = kelompokList.find((k) => k.id === resolvedKelompokId);
+          newKelompokNama = kObj ? kObj.nama : undefined;
+        }
+
         updatedUserObj = {
           ...u,
           ...data,
+          musyrifId: resolvedMusyrifId,
           musyrifNama: targetMusyrifNama !== undefined ? targetMusyrifNama : u.musyrifNama,
+          kelompokId: resolvedKelompokId,
+          kelompokNama: newKelompokNama,
         };
         return updatedUserObj;
       }
+
+      // Jika Musyrif yang di-update namanya, perbarui musyrifNama pada santri binaannya
+      if (existingUser?.role === 'MUSYRIF' && data.nama && u.musyrifId === userId) {
+        return {
+          ...u,
+          musyrifNama: data.nama.trim(),
+        };
+      }
+
       return u;
     });
 
     saveUsers(updatedUsers);
+
+    // Sinkronkan ke kelompokList secara otomatis (dua arah)
+    if (data.kelompokId !== undefined || (existingUser?.role === 'MUSYRIF' && data.nama)) {
+      const updatedKelompokList = kelompokList.map((k) => {
+        let item = { ...k };
+        // Jika nama musyrif berubah
+        if (item.musyrifId === userId && data.nama) {
+          item.musyrifNama = data.nama.trim();
+        }
+        // Sinkronkan keanggotaan santriIds
+        if (resolvedKelompokId && item.id === resolvedKelompokId) {
+          item.santriIds = Array.from(new Set([...item.santriIds, userId]));
+        } else {
+          item.santriIds = item.santriIds.filter((sid) => sid !== userId);
+        }
+        return item;
+      });
+      saveKelompok(updatedKelompokList);
+    }
 
     if (typeof window !== 'undefined' && updatedUserObj) {
       const currentAuth = localStorage.getItem('rajinqu_auth_user');
@@ -448,7 +498,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       await fetch('/api/users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userId, ...data }),
+        body: JSON.stringify({
+          id: userId,
+          ...data,
+          musyrifId: resolvedMusyrifId || null,
+          kelompokId: resolvedKelompokId || null,
+        }),
       });
     } catch (e) {
       console.error('Failed to update user in DB:', e);
@@ -547,11 +602,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       musyrifNama: newMusyrifNama,
     };
 
-    const updatedList = kelompokList.map((k) => (k.id === id ? updatedKelompok : k));
-    saveKelompok(updatedList);
-
     const finalSantriIds = data.santriIds !== undefined ? data.santriIds : currentKel.santriIds;
     const finalMusyrifId = data.musyrifId !== undefined ? data.musyrifId : currentKel.musyrifId;
+
+    // Bersihkan santri yang baru dimasukkan ke kelompok ini dari kelompok-kelompok lainnya
+    const updatedList = kelompokList.map((k) => {
+      if (k.id === id) {
+        return {
+          ...updatedKelompok,
+          santriIds: finalSantriIds,
+        };
+      } else if (data.santriIds !== undefined) {
+        return {
+          ...k,
+          santriIds: k.santriIds.filter((sid) => !finalSantriIds.includes(sid)),
+        };
+      }
+      return k;
+    });
+    saveKelompok(updatedList);
 
     const updatedUsers = allUsers.map((u) => {
       if (finalSantriIds.includes(u.id)) {
@@ -625,11 +694,36 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   };
 
   const removeSantriFromKelompok = (santriId: string) => {
-    const targetKel = kelompokList.find((k) => k.santriIds.includes(santriId));
-    if (!targetKel) return;
+    const updatedList = kelompokList.map((k) => ({
+      ...k,
+      santriIds: k.santriIds.filter((sid) => sid !== santriId),
+    }));
+    saveKelompok(updatedList);
 
-    const newSantriIds = targetKel.santriIds.filter((sid) => sid !== santriId);
-    updateKelompok(targetKel.id, { santriIds: newSantriIds });
+    const updatedUsers = allUsers.map((u) => {
+      if (u.id === santriId) {
+        return {
+          ...u,
+          kelompokId: undefined,
+          kelompokNama: undefined,
+        };
+      }
+      return u;
+    });
+    saveUsers(updatedUsers);
+
+    try {
+      fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: santriId,
+          kelompokId: null,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to remove santri from kelompok in DB:', e);
+    }
   };
 
   // ==========================================

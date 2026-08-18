@@ -954,7 +954,7 @@ export default function AdminPage() {
                     const matchName = k.nama.toLowerCase().includes(query);
                     const matchMusyrif = k.musyrifNama.toLowerCase().includes(query);
                     const matchSantri = santriList
-                      .filter((s) => k.santriIds.includes(s.id) || s.kelompokId === k.id)
+                      .filter((s) => s.kelompokId === k.id)
                       .some((s) => s.nama.toLowerCase().includes(query));
                     return matchName || matchMusyrif || matchSantri;
                   });
@@ -973,7 +973,7 @@ export default function AdminPage() {
 
                 return filteredKelompok.map((kelompok) => {
                   const anggotaSantri = santriList.filter(
-                    (s) => kelompok.santriIds.includes(s.id) || s.kelompokId === kelompok.id
+                    (s) => s.kelompokId === kelompok.id
                   );
                   const totalPoinKelompok = anggotaSantri.reduce((acc, s) => acc + (s.totalPoin || 0), 0);
                   const avgPoin = anggotaSantri.length > 0 ? Math.round(totalPoinKelompok / anggotaSantri.length) : 0;
@@ -1017,7 +1017,7 @@ export default function AdminPage() {
                                 deskripsi: kelompok.deskripsi || '',
                                 musyrifId: kelompok.musyrifId,
                                 kategoriGender: kelompok.kategoriGender || 'CAMPUR',
-                                santriIds: kelompok.santriIds || [],
+                                santriIds: santriList.filter((s) => s.kelompokId === kelompok.id).map((s) => s.id),
                               });
                               setIsEditKelompokOpen(true);
                             }}
@@ -1167,7 +1167,7 @@ export default function AdminPage() {
                             deskripsi: kelompok.deskripsi || '',
                             musyrifId: kelompok.musyrifId,
                             kategoriGender: kelompok.kategoriGender || 'CAMPUR',
-                            santriIds: kelompok.santriIds || [],
+                            santriIds: santriList.filter((s) => s.kelompokId === kelompok.id).map((s) => s.id),
                           });
                           setIsEditKelompokOpen(true);
                         }}
