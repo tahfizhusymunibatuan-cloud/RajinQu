@@ -18,17 +18,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MockUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Helper untuk mendapatkan daftar seluruh pengguna aktif (Live dari localStorage)
+  const getLiveUsers = (): MockUser[] => {
+    if (typeof window === 'undefined') return MOCK_USERS;
+    const saved = localStorage.getItem('rajinqu_users');
+    if (saved) {
+      try {
+        const parsed: MockUser[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error parsing stored users:', e);
+      }
+    }
+    return MOCK_USERS;
+  };
+
   useEffect(() => {
-    // Muat session dari localStorage jika ada, default ke santri 1
+    // Muat session yang tersimpan jika ada
     const storedUser = localStorage.getItem('rajinqu_auth_user');
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        const liveUsers = getLiveUsers();
+        const freshUser = liveUsers.find((u) => u.id === parsed.id || u.username === parsed.username);
+        setUser(freshUser || parsed);
       } catch {
-        setUser(MOCK_USERS[2]); // Default Faiz (Santri)
+        setUser(null);
       }
-    } else {
-      setUser(MOCK_USERS[2]); // Default Faiz
     }
     setIsLoading(false);
   }, []);
@@ -37,36 +55,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const cleanId = identifier.trim().toLowerCase();
     const cleanPass = pass.trim();
 
-    const matchedUser = MOCK_USERS.find(
+    // Dapatkan data user terbaru (termasuk yang baru dibuat oleh Admin)
+    const liveUsers = getLiveUsers();
+
+    const matchedUser = liveUsers.find(
       (u) =>
         (u.username.toLowerCase() === cleanId ||
-          u.noHp.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) &&
-        u.password === cleanPass
+          (u.noHp && u.noHp.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) ||
+          (u.nama && u.nama.toLowerCase() === cleanId)) &&
+        u.password.trim() === cleanPass
     );
 
     if (matchedUser) {
       setUser(matchedUser);
       localStorage.setItem('rajinqu_auth_user', JSON.stringify(matchedUser));
+      localStorage.setItem('rajinqu_session', JSON.stringify(matchedUser));
       return { success: true, message: 'Login berhasil!', user: matchedUser };
     }
 
     return {
       success: false,
-      message: 'Kredensial tidak cocok. Pastikan NIS/No HP & Password yang dibuatkan Admin sudah sesuai.',
+      message: 'Kredensial tidak cocok. Pastikan Username/NIS atau No. HP & Password sudah sesuai.',
     };
   };
 
   const switchUser = (userId: string) => {
-    const target = MOCK_USERS.find((u) => u.id === userId);
+    const liveUsers = getLiveUsers();
+    const target = liveUsers.find((u) => u.id === userId);
     if (target) {
       setUser(target);
       localStorage.setItem('rajinqu_auth_user', JSON.stringify(target));
+      localStorage.setItem('rajinqu_session', JSON.stringify(target));
     }
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('rajinqu_auth_user');
+    localStorage.removeItem('rajinqu_session');
   };
 
   return (

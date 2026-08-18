@@ -201,9 +201,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     saveUsers([...allUsers, newPengawas]);
   };
 
-  const addMusyrif = (data: { nama: string; username: string; noHp: string; password: string; asrama: string }) => {
+  const addMusyrif = (data: {
+    nama: string;
+    username: string;
+    noHp: string;
+    password: string;
+    asrama?: string;
+    kelompokId?: string;
+  }) => {
+    const newMusyrifId = `user-musyrif-${Date.now()}`;
     const newMusyrif: MockUser = {
-      id: `user-musyrif-${Date.now()}`,
+      id: newMusyrifId,
       username: data.username.trim().toLowerCase(),
       noHp: data.noHp.trim(),
       password: data.password.trim(),
@@ -211,10 +219,40 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       role: 'MUSYRIF',
       avatarUrl: `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80`,
       pondokNama: 'PTQA BATUAN',
-      asrama: data.asrama,
+      asrama: 'Musyrif PPTQ Batuan',
       totalPoin: 0,
     };
-    saveUsers([...allUsers, newMusyrif]);
+
+    let updatedUsers = [...allUsers, newMusyrif];
+
+    // Jika langsung ditugaskan ke kelompok
+    if (data.kelompokId) {
+      const updatedKelompok = kelompokList.map((k) => {
+        if (k.id === data.kelompokId) {
+          return {
+            ...k,
+            musyrifId: newMusyrifId,
+            musyrifNama: data.nama.trim(),
+          };
+        }
+        return k;
+      });
+      saveKelompok(updatedKelompok);
+
+      // Sinkronkan santri di kelompok tersebut
+      updatedUsers = updatedUsers.map((u) => {
+        if (u.kelompokId === data.kelompokId) {
+          return {
+            ...u,
+            musyrifId: newMusyrifId,
+            musyrifNama: data.nama.trim(),
+          };
+        }
+        return u;
+      });
+    }
+
+    saveUsers(updatedUsers);
   };
 
   const addSantri = (data: {

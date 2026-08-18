@@ -1204,14 +1204,13 @@ export default function PengurusPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
-                  <input
-                    type="text"
-                    value={profileForm.asrama}
-                    onChange={(e) => setProfileForm({ ...profileForm, asrama: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                  />
+                <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 block">
+                    Kelompok yang Dibina (PJ)
+                  </span>
+                  <p className="text-xs font-bold text-indigo-950 mt-0.5">
+                    {kelompokList.filter((k) => k.musyrifId === user?.id).map((k) => k.nama).join(', ') || 'Belum Ditugaskan ke Kelompok'}
+                  </p>
                 </div>
 
                 <button

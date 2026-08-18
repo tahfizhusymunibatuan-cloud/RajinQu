@@ -116,7 +116,7 @@ export default function AdminPage() {
     username: '',
     noHp: '',
     password: '123',
-    asrama: 'Musyrif Halaqoh Abu Bakar',
+    kelompokId: '',
   });
 
   // Modal Tambah Pengawas
@@ -136,8 +136,8 @@ export default function AdminPage() {
     username: '',
     noHp: '',
     password: '123',
-    asrama: 'Kelas 4 TMI / Halaqoh Abu Bakar',
-    musyrifId: musyrifList[0]?.id || 'user-musyrif-1',
+    asrama: '',
+    musyrifId: musyrifList[0]?.id || '',
     kelompokId: kelompokList[0]?.id || '',
   });
 
@@ -203,7 +203,7 @@ export default function AdminPage() {
     username: '',
     noHp: '',
     password: '',
-    asrama: '',
+    kelompokId: '',
   });
 
   // Modal Edit Pengawas
@@ -241,19 +241,25 @@ export default function AdminPage() {
   const handleCreateMusyrif = (e: React.FormEvent) => {
     e.preventDefault();
     if (!musyrifForm.nama || !musyrifForm.username || !musyrifForm.noHp) {
-      alert('Harap isi semua kolom.');
+      alert('Harap isi semua kolom nama, username, dan no. WhatsApp.');
       return;
     }
-    addMusyrif(musyrifForm);
+    addMusyrif({
+      nama: musyrifForm.nama.trim(),
+      username: musyrifForm.username.trim(),
+      noHp: musyrifForm.noHp.trim(),
+      password: musyrifForm.password.trim(),
+      kelompokId: musyrifForm.kelompokId || undefined,
+    });
     setIsAddMusyrifOpen(false);
     setMusyrifForm({
       nama: '',
       username: '',
       noHp: '',
       password: '123',
-      asrama: 'Musyrif Asrama Abu Bakar',
+      kelompokId: '',
     });
-    showNotification('✅ Akun Musyrif baru berhasil dibuat & siap bertugas!');
+    showNotification('✅ Akun Musyrif baru berhasil dibuat & dihubungkan ke kelompok!');
   };
 
   const handleCreatePengawas = (e: React.FormEvent) => {
@@ -634,7 +640,28 @@ export default function AdminPage() {
                             <div className="text-[10px] text-slate-400 mt-0.5">
                               User: <span className="font-mono font-bold text-slate-700">{u.username}</span> • PIN: <span className="font-mono text-teal-700 font-bold">{u.password}</span> • 📱 {u.noHp}
                             </div>
-                            {u.role !== 'SANTRI' && (
+                            {u.role === 'MUSYRIF' && (
+                              <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                {(() => {
+                                  const assignedKel = kelompokList.filter((k) => k.musyrifId === u.id);
+                                  if (assignedKel.length > 0) {
+                                    return (
+                                      <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md inline-flex items-center gap-1">
+                                        <Layers className="w-3 h-3 text-indigo-600" />
+                                        <span>PJ: {assignedKel.map((k) => k.nama).join(', ')}</span>
+                                      </span>
+                                    );
+                                  }
+                                  return <span className="text-slate-400 italic">Belum ditugaskan ke kelompok</span>;
+                                })()}
+                              </div>
+                            )}
+                            {u.role === 'PENGAWAS' && (
+                              <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                                {u.asrama || 'Pengawas Utama'}
+                              </div>
+                            )}
+                            {u.role === 'SUPER_ADMIN' && (
                               <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
                                 {u.asrama || u.pondokNama}
                               </div>
@@ -672,7 +699,7 @@ export default function AdminPage() {
                                   username: u.username,
                                   noHp: u.noHp,
                                   password: u.password,
-                                  asrama: u.asrama || '',
+                                  kelompokId: kelompokList.find((k) => k.musyrifId === u.id)?.id || '',
                                 });
                                 setIsEditMusyrifOpen(true);
                               } else if (u.role === 'PENGAWAS') {
@@ -1719,15 +1746,27 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Musyrif PPTQ Batuan"
-                  value={musyrifForm.asrama}
-                  onChange={(e) => setMusyrifForm({ ...musyrifForm, asrama: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+              {/* DROPDOWN HUBUNGKAN KE KELOMPOK */}
+              <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
+                <label className="block font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Tugaskan Sebagai PJ Kelompok</span>
+                </label>
+                <select
+                  value={musyrifForm.kelompokId || ''}
+                  onChange={(e) => setMusyrifForm({ ...musyrifForm, kelompokId: e.target.value })}
+                  className="w-full p-2 bg-white border border-indigo-300 rounded-xl text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">-- Belum Ditugaskan ke Kelompok --</option>
+                  {kelompokList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama} {k.musyrifNama ? `(PJ: ${k.musyrifNama})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-indigo-700 mt-1">
+                  Musyrif akan otomatis menjadi Penanggung Jawab bagi seluruh santri di kelompok yang dipilih.
+                </p>
               </div>
 
               <button
@@ -2374,8 +2413,35 @@ export default function AdminPage() {
                   username: editMusyrifForm.username.trim(),
                   noHp: editMusyrifForm.noHp.trim(),
                   password: editMusyrifForm.password.trim(),
-                  asrama: editMusyrifForm.asrama.trim(),
+                  asrama: 'Musyrif PPTQ Batuan',
                 });
+
+                if (editMusyrifForm.kelompokId) {
+                  const updatedKel = kelompokList.map((k) => {
+                    if (k.id === editMusyrifForm.kelompokId) {
+                      return {
+                        ...k,
+                        musyrifId: editMusyrifForm.id,
+                        musyrifNama: editMusyrifForm.nama.trim(),
+                      };
+                    }
+                    return k;
+                  });
+                  saveKelompok(updatedKel);
+
+                  const updatedUsers = allUsers.map((s) => {
+                    if (s.kelompokId === editMusyrifForm.kelompokId) {
+                      return {
+                        ...s,
+                        musyrifId: editMusyrifForm.id,
+                        musyrifNama: editMusyrifForm.nama.trim(),
+                      };
+                    }
+                    return s;
+                  });
+                  saveUsers(updatedUsers);
+                }
+
                 setIsEditMusyrifOpen(false);
                 showNotification(`✅ Data musyrif ${editMusyrifForm.nama} berhasil diperbarui!`);
               }}
@@ -2426,15 +2492,27 @@ export default function AdminPage() {
                 />
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Penugasan / Jabatan Musyrif</label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Musyrif PPTQ Batuan"
-                  value={editMusyrifForm.asrama}
-                  onChange={(e) => setEditMusyrifForm({ ...editMusyrifForm, asrama: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl"
-                />
+              {/* DROPDOWN HUBUNGKAN KE KELOMPOK */}
+              <div className="bg-indigo-50 p-2.5 rounded-xl border border-indigo-200">
+                <label className="block font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-indigo-700" />
+                  <span>Tugaskan Sebagai PJ Kelompok</span>
+                </label>
+                <select
+                  value={editMusyrifForm.kelompokId || ''}
+                  onChange={(e) => setEditMusyrifForm({ ...editMusyrifForm, kelompokId: e.target.value })}
+                  className="w-full p-2 bg-white border border-indigo-300 rounded-xl text-indigo-950 font-bold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">-- Belum Ditugaskan ke Kelompok --</option>
+                  {kelompokList.map((k) => (
+                    <option key={k.id} value={k.id}>
+                      {k.nama} {k.musyrifNama ? `(PJ: ${k.musyrifNama})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-indigo-700 mt-1">
+                  Musyrif akan otomatis menjadi Penanggung Jawab bagi seluruh santri di kelompok yang dipilih.
+                </p>
               </div>
 
               <button
