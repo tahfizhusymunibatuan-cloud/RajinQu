@@ -383,12 +383,12 @@ export default function SantriPage() {
         return;
       }
     } else {
-      // Jika dipicu dari tombol umum "Upload Kegiatan Baru", cari kegiatan yang belum selesai
-      const availableKeg = kegiatanList.find((k) => {
+      // Jika dipicu dari tombol umum "Upload Kegiatan Baru", cari kegiatan yang belum selesai berdasarkan urutan paling urgent/mendatang
+      const availableKeg = sortedKegiatanList.find((k) => {
         const s = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
         return s.canSubmit;
       });
-      targetKeg = availableKeg || kegiatanList[0];
+      targetKeg = availableKeg || sortedKegiatanList[0] || kegiatanList[0];
     }
 
     setSelectedKegiatan(targetKeg);
@@ -652,8 +652,62 @@ export default function SantriPage() {
   // Filter Feed: seluruh laporan santri yang sudah disetujui (APPROVED) oleh pembimbing
   const approvedFeedList = laporanList.filter((lap) => lap.status === 'APPROVED');
 
+  // Helper Informasi Peringkat & Badge
+  const getRankBadgeInfo = (rank?: number) => {
+    if (!rank) return { title: 'Santri Pondok', badge: 'Santri' };
+    if (rank === 1) return { title: '👑 Pemimpin Klasemen (Juara 1)', badge: '👑 Juara 1' };
+    if (rank === 2) return { title: '🥈 Runner-Up Klasemen', badge: '🥈 Rank #2' };
+    if (rank === 3) return { title: '🥉 Podium Utama', badge: '🥉 Rank #3' };
+    if (rank <= 5) return { title: '⭐ Top 5 Santri Terajin', badge: '⭐ Top 5' };
+    if (rank <= 10) return { title: '🌟 Top 10 Santri Terajin', badge: '🌟 Top 10' };
+    return { title: `🏅 Peringkat #${rank} Santri`, badge: `Rank #${rank}` };
+  };
+
   // Urutkan leaderboard
-  const sortedLeaderboard = [...santriList].sort((a, b) => b.totalPoin - a.totalPoin);
+  const sortedLeaderboard = [...santriList].sort((a, b) => (b.totalPoin || 0) - (a.totalPoin || 0));
+
+  // Pengurutan Cerdas Kronologis Kegiatan (Sedang Buka/Urgent -> Fleksibel -> Mendatang -> Selesai)
+  const sortedKegiatanList = React.useMemo(() => {
+    return [...kegiatanList].sort((a, b) => {
+      const statusA = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, a.id);
+      const statusB = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, b.id);
+
+      const cdA = a.isTimeRestricted ? calculateActivityCountdown(a.jamMulai, a.jamSelesai) : null;
+      const cdB = b.isTimeRestricted ? calculateActivityCountdown(b.jamMulai, b.jamSelesai) : null;
+
+      // Tier Score: 0 = paling atas/urgent, 4 = paling bawah/selesai
+      const getTier = (
+        k: MockKegiatan,
+        s: ReturnType<typeof getSantriDailyActivityStatus>,
+        cd: ReturnType<typeof calculateActivityCountdown> | null
+      ) => {
+        if (s.isApproved || s.isPending) return 4; // Sudah dikirim/selesai hari ini
+        if (s.isRejected) return 0; // Memerlukan lapor ulang segera
+
+        if (k.isTimeRestricted && cd) {
+          if (cd.status === 'SEGERA_BERAKHIR') return 0.1; // Segera berakhir (<= 20 min)
+          if (cd.status === 'SEDANG_DIBUKA') return 0.2; // Sedang buka sekarang
+          if (cd.status === 'BELUM_DIBUKA') return 2; // Mendatang
+          if (cd.status === 'BERAKHIR') return 3; // Lewat jam hari ini
+        }
+        return 1; // Waktu fleksibel / bebas
+      };
+
+      const tierA = getTier(a, statusA, cdA);
+      const tierB = getTier(b, statusB, cdB);
+
+      if (tierA !== tierB) return tierA - tierB;
+
+      // Jika sama-sama Mendatang (Tier 2), urutkan berdasarkan Jam Mulai paling awal
+      if (tierA === 2 && a.jamMulai && b.jamMulai) {
+        return a.jamMulai.localeCompare(b.jamMulai);
+      }
+
+      // Tie-breaker: Kegiatan Wajib dahulu, lalu Poin terbesar
+      if (a.isWajib !== b.isWajib) return a.isWajib ? -1 : 1;
+      return (b.poin || 0) - (a.poin || 0);
+    });
+  }, [kegiatanList, laporanList, user]);
 
   if (!mounted || isLoading || !user) {
     return (
@@ -909,15 +963,51 @@ export default function SantriPage() {
                         {showCommentBox[lap.id] && (
                           <div className="mt-3 pt-2 border-t border-slate-100 space-y-2">
                             {/* List Comments */}
-                            {lap.comments.map((comm) => (
-                              <div key={comm.id} className="text-xs bg-slate-50 p-2 rounded-xl">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-bold text-slate-800 text-[11px]">{comm.nama}</span>
-                                  <span className="text-[9px] text-slate-400">{comm.waktu}</span>
+                            {lap.comments.map((comm) => {
+                              const isPengawas = comm.role === 'PENGAWAS' || comm.role === 'SUPER_ADMIN' || comm.isi.includes('[Catatan Pengawas]');
+                              const isMusyrif = comm.role === 'MUSYRIF';
+
+                              return (
+                                <div
+                                  key={comm.id}
+                                  className={`text-xs p-2.5 rounded-xl border transition ${
+                                    isPengawas
+                                      ? 'bg-gradient-to-r from-amber-50/90 to-amber-100/50 border-amber-300 text-amber-950 shadow-2xs'
+                                      : isMusyrif
+                                      ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {comm.avatar && (
+                                        <img
+                                          src={comm.avatar}
+                                          alt={comm.nama}
+                                          className="w-4 h-4 rounded-full object-cover border border-slate-300"
+                                        />
+                                      )}
+                                      <span className="font-extrabold text-[11px]">{comm.nama}</span>
+
+                                      {isPengawas && (
+                                        <span className="text-[8px] bg-amber-400 text-amber-950 px-1.5 py-0.2 rounded-full font-black border border-amber-500 shadow-2xs">
+                                          🛡️ Pengawas Kesantrian
+                                        </span>
+                                      )}
+                                      {isMusyrif && (
+                                        <span className="text-[8px] bg-teal-200 text-teal-950 px-1.5 py-0.2 rounded-full font-bold border border-teal-300">
+                                          ☪️ Pembimbing
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[9px] text-slate-400 shrink-0">{comm.waktu}</span>
+                                  </div>
+                                  <p className="text-[11px] leading-relaxed font-medium pl-0.5 mt-0.5">
+                                    {comm.isi.replace('[Catatan Pengawas] ', '')}
+                                  </p>
                                 </div>
-                                <p className="text-slate-600 text-[11px] mt-0.5">{comm.isi}</p>
-                              </div>
-                            ))}
+                              );
+                            })}
 
                             {/* Add Comment Input */}
                             <div className="flex items-center gap-1.5 pt-1">
@@ -982,7 +1072,7 @@ export default function SantriPage() {
             })()}
 
             <div className="space-y-2.5">
-              {kegiatanList.map((keg) => {
+              {sortedKegiatanList.map((keg) => {
                 const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, keg.id);
                 const isApproved = dailyStatus.isApproved;
                 const isPending = dailyStatus.isPending;
@@ -994,11 +1084,11 @@ export default function SantriPage() {
                     key={keg.id}
                     className={`bg-white rounded-2xl p-3.5 border transition shadow-sm ${
                       isApproved
-                        ? 'border-emerald-300 bg-emerald-50/25'
+                        ? 'border-emerald-300 bg-emerald-50/25 opacity-75'
                         : isPending
-                        ? 'border-amber-300 bg-amber-50/25'
+                        ? 'border-amber-300 bg-amber-50/25 opacity-80'
                         : isRejected
-                        ? 'border-rose-300 bg-rose-50/25'
+                        ? 'border-rose-300 bg-rose-50/30'
                         : 'border-slate-200 hover:border-teal-300'
                     }`}
                   >
@@ -1045,6 +1135,7 @@ export default function SantriPage() {
                                     <Clock className="w-3 h-3 text-slate-500" />
                                     <span>{keg.targetWaktu}</span>
                                     {cd.status === 'SEGERA_BERAKHIR' && <span>🔥 Segera Berakhir!</span>}
+                                    {cd.status === 'SEDANG_DIBUKA' && <span>🟢 Dibuka Now</span>}
                                   </span>
                                 );
                               })()
@@ -1128,100 +1219,154 @@ export default function SantriPage() {
 
             {/* Podium Top 3 */}
             <div className="grid grid-cols-3 gap-2 pt-4 items-end">
-              {/* Juara 2 */}
-              <div className="bg-white p-2.5 rounded-2xl border border-slate-200 text-center shadow-sm order-1">
+              {/* Juara 2 (Runner-Up) */}
+              <div className="bg-white p-2.5 rounded-2xl border border-slate-200 text-center shadow-sm order-1 relative">
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">🥈 Juara 2</div>
                 <div className="relative inline-block mb-1">
                   <img
-                    src={sortedLeaderboard[1]?.avatarUrl}
-                    alt={sortedLeaderboard[1]?.nama}
-                    className="w-12 h-12 rounded-full mx-auto object-cover border-2 border-slate-300"
+                    src={sortedLeaderboard[1]?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'}
+                    alt={sortedLeaderboard[1]?.nama || 'Belum ada'}
+                    className="w-12 h-12 rounded-full mx-auto object-cover border-2 border-slate-300 shadow-2xs"
                   />
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-slate-300 text-slate-800 text-[10px] font-bold flex items-center justify-center shadow-xs">
                     2
                   </span>
                 </div>
-                <div className="text-[11px] font-bold text-slate-800 truncate">{sortedLeaderboard[1]?.nama}</div>
-                <div className="text-[10px] text-amber-600 font-extrabold mt-0.5">{sortedLeaderboard[1]?.totalPoin} Poin</div>
+                <div className="text-[11px] font-bold text-slate-800 truncate">
+                  {sortedLeaderboard[1]?.nama || 'Belum Ada'}
+                </div>
+                <div className="text-[10px] text-amber-600 font-extrabold mt-0.5">
+                  {sortedLeaderboard[1] ? `${sortedLeaderboard[1].totalPoin} Poin` : '0 Poin'}
+                </div>
               </div>
 
-              {/* Juara 1 (Paling Tinggi) */}
-              <div className="bg-gradient-to-b from-amber-50 to-white p-3 rounded-2xl border-2 border-amber-400 text-center shadow-md order-2 -mt-3">
-                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">👑 Juara 1</div>
+              {/* Juara 1 (Puncak Leaderboard) */}
+              <div className="bg-gradient-to-b from-amber-50 to-white p-3 rounded-2xl border-2 border-amber-400 text-center shadow-md order-2 -mt-3 relative">
+                <div className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
+                  <span>👑 Juara 1</span>
+                </div>
                 <div className="relative inline-block mb-1">
                   <img
-                    src={sortedLeaderboard[0]?.avatarUrl}
-                    alt={sortedLeaderboard[0]?.nama}
-                    className="w-14 h-14 rounded-full mx-auto object-cover border-2 border-amber-400"
+                    src={sortedLeaderboard[0]?.avatarUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'}
+                    alt={sortedLeaderboard[0]?.nama || 'Belum ada'}
+                    className="w-14 h-14 rounded-full mx-auto object-cover border-2 border-amber-400 shadow-sm"
                   />
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-bold flex items-center justify-center shadow">
+                  <span className="absolute -bottom-1 -right-1 w-5.5 h-5.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow-sm">
                     1
                   </span>
                 </div>
-                <div className="text-xs font-bold text-slate-900 truncate">{sortedLeaderboard[0]?.nama}</div>
-                <div className="text-xs text-amber-600 font-black mt-0.5">{sortedLeaderboard[0]?.totalPoin} Poin</div>
+                <div className="text-xs font-bold text-slate-900 truncate">
+                  {sortedLeaderboard[0]?.nama || 'Belum Ada'}
+                </div>
+                <div className="text-xs text-amber-600 font-black mt-0.5">
+                  {sortedLeaderboard[0] ? `${sortedLeaderboard[0].totalPoin} Poin` : '0 Poin'}
+                </div>
               </div>
 
               {/* Juara 3 */}
-              <div className="bg-white p-2.5 rounded-2xl border border-slate-200 text-center shadow-sm order-3">
+              <div className="bg-white p-2.5 rounded-2xl border border-slate-200 text-center shadow-sm order-3 relative">
+                <div className="text-[10px] font-bold text-amber-800 uppercase tracking-wider mb-1">🥉 Juara 3</div>
                 <div className="relative inline-block mb-1">
                   <img
-                    src={sortedLeaderboard[2]?.avatarUrl}
-                    alt={sortedLeaderboard[2]?.nama}
-                    className="w-12 h-12 rounded-full mx-auto object-cover border-2 border-amber-700/40"
+                    src={sortedLeaderboard[2]?.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'}
+                    alt={sortedLeaderboard[2]?.nama || 'Belum ada'}
+                    className="w-12 h-12 rounded-full mx-auto object-cover border-2 border-amber-700/40 shadow-2xs"
                   />
-                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center">
+                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
                     3
                   </span>
                 </div>
-                <div className="text-[11px] font-bold text-slate-800 truncate">{sortedLeaderboard[2]?.nama}</div>
-                <div className="text-[10px] text-amber-600 font-extrabold mt-0.5">{sortedLeaderboard[2]?.totalPoin} Poin</div>
+                <div className="text-[11px] font-bold text-slate-800 truncate">
+                  {sortedLeaderboard[2]?.nama || 'Belum Ada'}
+                </div>
+                <div className="text-[10px] text-amber-600 font-extrabold mt-0.5">
+                  {sortedLeaderboard[2] ? `${sortedLeaderboard[2].totalPoin} Poin` : '0 Poin'}
+                </div>
               </div>
             </div>
 
-            {/* List Peringkat 4 ke bawah */}
+            {/* List Peringkat Santri Lengkap */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-3 border-b border-slate-100 text-xs font-bold text-slate-700">
-                Daftar Peringkat Santri
+              <div className="p-3 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  Daftar Peringkat Real Santri
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">
+                  Total {santriList.length} Santri
+                </span>
               </div>
-              <div className="divide-y divide-slate-100">
-                {sortedLeaderboard.map((santri, index) => {
-                  const isCurrent = santri.id === user?.id || santri.nama === user?.nama;
-                  return (
-                    <div
-                      key={santri.id}
-                      className={`p-3 flex items-center justify-between ${isCurrent ? 'bg-amber-50/70 font-semibold' : ''
+
+              {sortedLeaderboard.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  Belum ada santri terdaftar dalam klasemen.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {sortedLeaderboard.map((santri, index) => {
+                    const isCurrent = santri.id === user?.id || santri.nama === user?.nama;
+                    const rankNum = santri.peringkat || (index + 1);
+
+                    return (
+                      <div
+                        key={santri.id || index}
+                        className={`p-3 flex items-center justify-between transition ${
+                          isCurrent
+                            ? 'bg-amber-50/90 font-semibold border-l-4 border-amber-400'
+                            : 'hover:bg-slate-50'
                         }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 text-center text-xs font-bold text-slate-500">
-                          #{index + 1}
-                        </span>
-                        <img
-                          src={santri.avatarUrl}
-                          alt={santri.nama}
-                          className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                        />
-                        <div>
-                          <div className="text-xs text-slate-800 flex items-center gap-1">
-                            <span>{santri.nama}</span>
-                            {isCurrent && (
-                              <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-bold">
-                                Kamu
-                              </span>
-                            )}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-full text-center text-[11px] font-extrabold flex items-center justify-center shrink-0 ${
+                              rankNum === 1
+                                ? 'bg-amber-400 text-amber-950 shadow-xs'
+                                : rankNum === 2
+                                ? 'bg-slate-200 text-slate-800'
+                                : rankNum === 3
+                                ? 'bg-amber-800 text-amber-50'
+                                : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            #{rankNum}
+                          </span>
+                          <img
+                            src={santri.avatarUrl || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'}
+                            alt={santri.nama}
+                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-xs text-slate-900 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{santri.nama}</span>
+                              {isCurrent && (
+                                <span className="text-[9px] bg-amber-300 text-amber-950 px-1.5 py-0.2 rounded-full font-extrabold shrink-0 border border-amber-400">
+                                  Kamu ⭐
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate">
+                              {santri.asrama || santri.kelompokNama || 'Santri Pondok'}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-400">{santri.asrama || 'Santri Pondok'}</div>
+                        </div>
+
+                        <div className="text-right shrink-0 ml-2">
+                          <div className="text-xs font-black text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                            {santri.totalPoin || 0} Poin
+                          </div>
+                          {rankNum > 1 && santri.selisihPeringkat !== undefined && (
+                            <div className="text-[9px] text-amber-700 font-semibold mt-0.5">
+                              {santri.selisihPeringkat > 0
+                                ? `-${santri.selisihPeringkat} poin ke #${rankNum - 1}`
+                                : 'Poin Sama'}
+                            </div>
+                          )}
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-teal-700">{santri.totalPoin}</span>
-                        <span className="text-[10px] text-slate-500 ml-1">Poin</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1402,26 +1547,68 @@ export default function SantriPage() {
               </div>
             </div>
 
-            {/* Quick Metrics */}
+            {/* Quick Metrics & Real-Time Peringkat */}
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-[11px] font-semibold text-slate-500">Total Poin Terkumpul</div>
-                <div className="text-xl font-extrabold text-teal-700 mt-1 flex items-center gap-1.5">
-                  <Sparkles className="w-5 h-5 text-amber-500" />
-                  <span>{santriTotalPoin} Poin</span>
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500">Total Poin Terkumpul</div>
+                  <div className="text-xl font-extrabold text-teal-700 mt-1 flex items-center gap-1.5">
+                    <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
+                    <span>{santriTotalPoin} Poin</span>
+                  </div>
                 </div>
-                <div className="text-[10px] text-emerald-600 mt-0.5">
+                <div className="text-[10px] text-emerald-600 mt-1.5 font-medium">
                   {rewardPercent}% dari target {targetPoinPeriode} Poin
                 </div>
               </div>
 
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="text-[11px] font-semibold text-slate-500">Peringkat Saat Ini</div>
-                <div className="text-xl font-extrabold text-amber-600 mt-1 flex items-center gap-1.5">
-                  <Trophy className="w-5 h-5 text-amber-500" />
-                  <span>#{currentSantriUser?.peringkat || 1}</span>
+              <div
+                onClick={() => setActiveTab('leaderboard')}
+                className="bg-gradient-to-br from-amber-50/80 via-white to-amber-50/30 p-3.5 rounded-2xl border border-amber-200 shadow-sm flex flex-col justify-between cursor-pointer hover:border-amber-300 transition"
+              >
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-600 flex items-center justify-between">
+                    <span>Peringkat Saat Ini</span>
+                    <span className="text-[9px] bg-amber-200/80 text-amber-900 font-bold px-1.5 py-0.5 rounded-full">
+                      {getRankBadgeInfo(currentSantriUser?.peringkat).badge}
+                    </span>
+                  </div>
+                  <div className="text-xl font-extrabold text-amber-600 mt-1 flex items-center gap-1.5">
+                    <Trophy className="w-5 h-5 text-amber-500 shrink-0" />
+                    <span>#{currentSantriUser?.peringkat || 1}</span>
+                  </div>
                 </div>
-                <div className="text-[10px] text-teal-600 mt-0.5">Dari {santriList.length} Santri Terdaftar</div>
+                <div className="text-[10px] text-teal-700 font-semibold mt-1.5 flex items-center justify-between">
+                  <span>Dari {santriList.length} Santri</span>
+                  <span className="text-amber-700 font-bold hover:underline flex items-center gap-0.5">
+                    Detail <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Banner Insight Peringkat Dinamis & Selisih Poin */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-teal-500/10 to-emerald-500/10 p-3 rounded-2xl border border-amber-200/80 shadow-xs flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+                  <Award className="w-4.5 h-4.5 text-amber-600" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-800">
+                    {getRankBadgeInfo(currentSantriUser?.peringkat).title}
+                  </div>
+                  <div className="text-[10px] text-slate-600 mt-0.5">
+                    {currentSantriUser?.peringkat === 1 ? (
+                      <span className="text-amber-800 font-semibold">
+                        🔥 Unggul +{santriTotalPoin - (sortedLeaderboard[1]?.totalPoin || 0)} poin dari Runner-Up!
+                      </span>
+                    ) : (
+                      <span className="text-teal-800 font-semibold">
+                        ⚡ Butuh +{currentSantriUser?.selisihPeringkat || 10} poin lagi untuk mengejar Peringkat #{(currentSantriUser?.peringkat || 2) - 1}!
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1649,7 +1836,7 @@ export default function SantriPage() {
                 <select
                   value={selectedKegiatan?.id || ''}
                   onChange={(e) => {
-                    const found = kegiatanList.find((k) => k.id === e.target.value);
+                    const found = sortedKegiatanList.find((k) => k.id === e.target.value);
                     if (found) {
                       const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, found.id);
                       if (dailyStatus.isApproved) {
@@ -1665,7 +1852,7 @@ export default function SantriPage() {
                   }}
                   className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 font-medium"
                 >
-                  {kegiatanList.map((k) => {
+                  {sortedKegiatanList.map((k) => {
                     const statusObj = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
                     const isDone = statusObj.isApproved;
                     const isPending = statusObj.isPending;

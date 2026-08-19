@@ -62,6 +62,7 @@ export default function AdminPage() {
     updateUser,
     deleteUser,
     addKegiatan,
+    updateKegiatan,
     updateKegiatanPoin,
     toggleKegiatanWajib,
     updateKegiatanTime,
@@ -166,6 +167,10 @@ export default function AdminPage() {
     jamSelesai: '05:45',
     targetWaktu: '04:30 - 05:45 WIB',
   });
+
+  // Modal Edit Kegiatan
+  const [isEditKegiatanOpen, setIsEditKegiatanOpen] = useState(false);
+  const [editKegiatanForm, setEditKegiatanForm] = useState<MockKegiatan | null>(null);
 
   // Modal Tambah Periode
   const [isAddPeriodeOpen, setIsAddPeriodeOpen] = useState(false);
@@ -273,6 +278,37 @@ export default function AdminPage() {
 
   const handleSavePoinSettings = () => {
     showNotification('✅ Pengaturan bobot poin kegiatan berhasil disimpan!');
+  };
+
+  const handleSaveEditKegiatan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editKegiatanForm) return;
+
+    if (!editKegiatanForm.nama.trim()) {
+      alert('Nama kegiatan tidak boleh kosong.');
+      return;
+    }
+
+    const targetWaktu = editKegiatanForm.isTimeRestricted
+      ? `${editKegiatanForm.jamMulai || '05:00'} - ${editKegiatanForm.jamSelesai || '07:00'} WIB`
+      : 'Bebas / Kapan Saja';
+
+    await updateKegiatan(editKegiatanForm.id, {
+      nama: editKegiatanForm.nama.trim(),
+      deskripsi: editKegiatanForm.deskripsi.trim(),
+      kategori: editKegiatanForm.kategori,
+      poin: Number(editKegiatanForm.poin),
+      icon: editKegiatanForm.icon,
+      isWajib: editKegiatanForm.isWajib,
+      isTimeRestricted: editKegiatanForm.isTimeRestricted,
+      jamMulai: editKegiatanForm.isTimeRestricted ? editKegiatanForm.jamMulai : undefined,
+      jamSelesai: editKegiatanForm.isTimeRestricted ? editKegiatanForm.jamSelesai : undefined,
+      targetWaktu,
+    });
+
+    setIsEditKegiatanOpen(false);
+    setEditKegiatanForm(null);
+    showNotification(`✅ Kegiatan "${editKegiatanForm.nama}" berhasil diperbarui!`);
   };
 
   const handleCreateMusyrif = (e: React.FormEvent) => {
@@ -1360,20 +1396,33 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Tombol Hapus */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (confirm(`Hapus kegiatan "${keg.nama}"?`)) {
-                            deleteKegiatan(keg.id);
-                            showNotification(`🗑️ Kegiatan "${keg.nama}" berhasil dihapus.`);
-                          }
-                        }}
-                        className="text-slate-300 hover:text-rose-600 p-1 transition"
-                        title="Hapus Kegiatan"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Tombol Aksi Edit & Hapus */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditKegiatanForm({ ...keg });
+                            setIsEditKegiatanOpen(true);
+                          }}
+                          className="text-slate-400 hover:text-teal-700 hover:bg-teal-50 p-1.5 rounded-lg transition"
+                          title="Edit Kegiatan Master"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Hapus kegiatan "${keg.nama}"?`)) {
+                              deleteKegiatan(keg.id);
+                              showNotification(`🗑️ Kegiatan "${keg.nama}" berhasil dihapus.`);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition"
+                          title="Hapus Kegiatan"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Pengaturan Jam Langsung jika Dibatasi Waktu */}
@@ -3221,6 +3270,164 @@ export default function AdminPage() {
                 className="w-full py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-xl shadow mt-2"
               >
                 Simpan Penempatan Kelompok
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL EDIT KEGIATAN MASTER */}
+      {/* ================================================================= */}
+      {isEditKegiatanOpen && editKegiatanForm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl p-4 space-y-3 animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2 text-teal-900 font-bold text-sm">
+                <Edit className="w-5 h-5 text-teal-600" />
+                <span>Edit Master Kegiatan</span>
+              </div>
+              <button
+                onClick={() => setIsEditKegiatanOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditKegiatan} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nama Kegiatan</label>
+                <input
+                  type="text"
+                  required
+                  value={editKegiatanForm.nama}
+                  onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, nama: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Deskripsi / Petunjuk Setor</label>
+                <textarea
+                  rows={2}
+                  value={editKegiatanForm.deskripsi || ''}
+                  onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, deskripsi: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl leading-relaxed"
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Kategori Pilar</label>
+                  <select
+                    value={editKegiatanForm.kategori}
+                    onChange={(e) =>
+                      setEditKegiatanForm({
+                        ...editKegiatanForm,
+                        kategori: e.target.value as any,
+                      })
+                    }
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
+                  >
+                    <option value="IBADAH">🕌 IBADAH</option>
+                    <option value="BELAJAR">📖 BELAJAR</option>
+                    <option value="SOSIAL">🤝 SOSIAL</option>
+                    <option value="MANDIRI">🌱 MANDIRI</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Bobot Poin</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    required
+                    value={editKegiatanForm.poin}
+                    onChange={(e) =>
+                      setEditKegiatanForm({
+                        ...editKegiatanForm,
+                        poin: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-teal-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Ikon Kegiatan</label>
+                  <select
+                    value={editKegiatanForm.icon || 'Sparkles'}
+                    onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, icon: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900"
+                  >
+                    <option value="Sunrise">🌅 Sunrise (Subuh)</option>
+                    <option value="SunMedium">☀️ SunMedium (Dzuhur/Ashar)</option>
+                    <option value="BookOpen">📖 BookOpen (Tahfizh/Belajar)</option>
+                    <option value="HeartHandshake">🤝 HeartHandshake (Sosial)</option>
+                    <option value="GraduationCap">🎓 GraduationCap (Mandiri)</option>
+                    <option value="Activity">⚡ Activity (Olahraga)</option>
+                    <option value="Sparkles">✨ Sparkles (Umum)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editKegiatanForm.isWajib}
+                      onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, isWajib: e.target.checked })}
+                      className="w-4 h-4 text-rose-600 rounded"
+                    />
+                    <span className="font-bold text-slate-800">Kegiatan Wajib</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Batasan Waktu */}
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <label className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editKegiatanForm.isTimeRestricted}
+                    onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, isTimeRestricted: e.target.checked })}
+                    className="w-4 h-4 text-teal-600 rounded"
+                  />
+                  <span className="font-semibold text-slate-800">Dibatasi Waktu / Jam Tertentu (WIB)</span>
+                </label>
+
+                {editKegiatanForm.isTimeRestricted && (
+                  <div className="grid grid-cols-2 gap-2 bg-teal-50/70 p-2.5 rounded-xl border border-teal-200">
+                    <div>
+                      <label className="block text-[11px] font-bold text-teal-900 mb-1">Jam Mulai (WIB)</label>
+                      <input
+                        type="time"
+                        value={editKegiatanForm.jamMulai || '04:30'}
+                        onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, jamMulai: e.target.value })}
+                        className="w-full p-1.5 bg-white border border-teal-300 rounded-lg font-bold text-teal-950"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-teal-900 mb-1">Jam Selesai (WIB)</label>
+                      <input
+                        type="time"
+                        value={editKegiatanForm.jamSelesai || '06:00'}
+                        onChange={(e) => setEditKegiatanForm({ ...editKegiatanForm, jamSelesai: e.target.value })}
+                        className="w-full p-1.5 bg-white border border-teal-300 rounded-lg font-bold text-teal-950"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-xl shadow-xs transition active:scale-95 mt-2"
+              >
+                Simpan Perubahan Kegiatan
               </button>
             </form>
           </div>

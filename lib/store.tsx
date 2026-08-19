@@ -41,6 +41,7 @@ interface StoreContextType {
   updateUser: (userId: string, data: Partial<MockUser>) => void;
   deleteUser: (userId: string) => void;
   addKegiatan: (data: Omit<MockKegiatan, 'id'>) => void;
+  updateKegiatan: (id: string, data: Partial<MockKegiatan>) => Promise<void>;
   updateKegiatanPoin: (id: string, newPoin: number) => void;
   toggleKegiatanWajib: (id: string) => void;
   updateKegiatanTime: (id: string, isTimeRestricted: boolean, jamMulai?: string, jamSelesai?: string) => void;
@@ -169,10 +170,69 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     syncFromDatabase();
   }, [syncFromDatabase]);
 
-  // Kategori pengguna
-  const santriList = allUsers.filter((u) => u.role === 'SANTRI');
-  const musyrifList = allUsers.filter((u) => u.role === 'MUSYRIF');
-  const pengawasList = allUsers.filter((u) => u.role === 'PENGAWAS');
+  // Kalkulasi Dynamic Real-Time Ranking & Selisih Poin untuk Seluruh Santri
+  const enrichedAllUsers = React.useMemo(() => {
+    const santriOnly = allUsers.filter((u) => u.role === 'SANTRI');
+
+    // Count approved reports per santri for tie-breaker
+    const approvedCountMap = new Map<string, number>();
+    laporanList.forEach((lap) => {
+      if (lap.status === 'APPROVED') {
+        if (lap.userId) {
+          approvedCountMap.set(lap.userId, (approvedCountMap.get(lap.userId) || 0) + 1);
+        }
+        if (lap.userNama) {
+          approvedCountMap.set(lap.userNama, (approvedCountMap.get(lap.userNama) || 0) + 1);
+        }
+      }
+    });
+
+    // Sort santri by totalPoin descending -> approvedCount -> name
+    const sortedSantri = [...santriOnly].sort((a, b) => {
+      const poinA = a.totalPoin || 0;
+      const poinB = b.totalPoin || 0;
+      if (poinB !== poinA) return poinB - poinA;
+
+      const appA = approvedCountMap.get(a.id) || approvedCountMap.get(a.nama) || 0;
+      const appB = approvedCountMap.get(b.id) || approvedCountMap.get(b.nama) || 0;
+      if (appB !== appA) return appB - appA;
+
+      return a.nama.localeCompare(b.nama);
+    });
+
+    // Map rank info
+    const rankMap = new Map<string, { peringkat: number; selisihPeringkat: number }>();
+    sortedSantri.forEach((santri, index) => {
+      const peringkat = index + 1;
+      const prevSantri = index > 0 ? sortedSantri[index - 1] : null;
+      const prevPoin = prevSantri ? (prevSantri.totalPoin || 0) : (santri.totalPoin || 0);
+      const selisihPeringkat = prevPoin - (santri.totalPoin || 0);
+
+      rankMap.set(santri.id, { peringkat, selisihPeringkat });
+      if (santri.nama) {
+        rankMap.set(santri.nama, { peringkat, selisihPeringkat });
+      }
+    });
+
+    return allUsers.map((u) => {
+      if (u.role === 'SANTRI') {
+        const info = rankMap.get(u.id) || rankMap.get(u.nama);
+        return {
+          ...u,
+          peringkat: info ? info.peringkat : (u.peringkat || 1),
+          selisihPeringkat: info ? info.selisihPeringkat : 0,
+        };
+      }
+      return u;
+    });
+  }, [allUsers, laporanList]);
+
+  const santriList = React.useMemo(() => {
+    return enrichedAllUsers.filter((u) => u.role === 'SANTRI');
+  }, [enrichedAllUsers]);
+
+  const musyrifList = enrichedAllUsers.filter((u) => u.role === 'MUSYRIF');
+  const pengawasList = enrichedAllUsers.filter((u) => u.role === 'PENGAWAS');
   const activePeriode = periodeList.find((p) => p.isActive) || periodeList[0];
 
   // ==========================================
@@ -752,6 +812,21 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateKegiatan = async (id: string, data: Partial<MockKegiatan>) => {
+    const updated = kegiatanList.map((k) => (k.id === id ? { ...k, ...data } : k));
+    saveKegiatan(updated);
+
+    try {
+      await fetch('/api/kegiatan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...data }),
+      });
+    } catch (e) {
+      console.error('Failed to update kegiatan in DB:', e);
+    }
+  };
+
   const updateKegiatanPoin = async (id: string, newPoin: number) => {
     const updated = kegiatanList.map((k) => (k.id === id ? { ...k, poin: newPoin } : k));
     saveKegiatan(updated);
@@ -1178,7 +1253,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     <StoreContext.Provider
       value={{
         laporanList,
-        allUsers,
+        allUsers: enrichedAllUsers,
         santriList,
         musyrifList,
         pengawasList,
@@ -1201,6 +1276,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         updateUser,
         deleteUser,
         addKegiatan,
+        updateKegiatan,
         updateKegiatanPoin,
         toggleKegiatanWajib,
         updateKegiatanTime,
