@@ -124,23 +124,36 @@ export function getSantriDailyActivityStatus(
 
   // Cari semua laporan santri untuk kegiatan ini pada hari yang ditentukan
   const matchedLaporans = (laporanList || []).filter((lap) => {
-    const isUser = (userId && lap.userId === userId) || (userNama && lap.userNama === userNama);
+    const isUser =
+      (userId && String(lap.userId) === String(userId)) ||
+      (userNama && lap.userNama && String(lap.userNama).trim().toLowerCase() === String(userNama).trim().toLowerCase());
     if (!isUser) return false;
-    if (kegiatanId && lap.kegiatanId !== kegiatanId) return false;
+    if (kegiatanId && String(lap.kegiatanId) !== String(kegiatanId)) return false;
 
     // Normalisasi tanggal pembuatan laporan ke WIB YYYY-MM-DD
-    const lapDate = lap.createdAt ? new Date(lap.createdAt) : new Date();
-    const lapDateWIB = new Date(lapDate.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const lapYear = lapDateWIB.getFullYear();
-    const lapMonth = (lapDateWIB.getMonth() + 1).toString().padStart(2, '0');
-    const lapDay = lapDateWIB.getDate().toString().padStart(2, '0');
-    const lapDateStr = `${lapYear}-${lapMonth}-${lapDay}`;
+    let lapDateStr = '';
+    if (!lap.createdAt) {
+      lapDateStr = getTodayWIBDateString();
+    } else if (typeof lap.createdAt === 'string' && lap.createdAt.toLowerCase().includes('hari ini')) {
+      lapDateStr = getTodayWIBDateString();
+    } else {
+      const lapDate = new Date(lap.createdAt);
+      if (isNaN(lapDate.getTime())) {
+        lapDateStr = getTodayWIBDateString();
+      } else {
+        const lapDateWIB = new Date(lapDate.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+        const lapYear = lapDateWIB.getFullYear();
+        const lapMonth = (lapDateWIB.getMonth() + 1).toString().padStart(2, '0');
+        const lapDay = lapDateWIB.getDate().toString().padStart(2, '0');
+        lapDateStr = `${lapYear}-${lapMonth}-${lapDay}`;
+      }
+    }
 
     return lapDateStr === dateKey;
   });
 
   // Prioritas 1: Jika ada yang APPROVED -> Berstatus APPROVED (Terkunci & Selesai)
-  const approvedLap = matchedLaporans.find((l) => l.status === 'APPROVED');
+  const approvedLap = matchedLaporans.find((l) => l.status && String(l.status).toUpperCase() === 'APPROVED');
   if (approvedLap) {
     return {
       status: 'APPROVED',
@@ -153,7 +166,7 @@ export function getSantriDailyActivityStatus(
   }
 
   // Prioritas 2: Jika ada yang PENDING -> Berstatus PENDING (Menunggu Validasi Musyrif)
-  const pendingLap = matchedLaporans.find((l) => l.status === 'PENDING');
+  const pendingLap = matchedLaporans.find((l) => l.status && String(l.status).toUpperCase() === 'PENDING');
   if (pendingLap) {
     return {
       status: 'PENDING',
@@ -166,7 +179,7 @@ export function getSantriDailyActivityStatus(
   }
 
   // Prioritas 3: Jika ada yang REJECTED -> Berstatus REJECTED (Bisa Lapor Ulang)
-  const rejectedLap = matchedLaporans.find((l) => l.status === 'REJECTED');
+  const rejectedLap = matchedLaporans.find((l) => l.status && String(l.status).toUpperCase() === 'REJECTED');
   if (rejectedLap) {
     return {
       status: 'REJECTED',

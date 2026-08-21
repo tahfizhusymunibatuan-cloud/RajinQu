@@ -126,8 +126,9 @@ export default function SantriPage() {
     copied: false,
   });
 
-  // Riwayat Filter
+  // Riwayat & Tugas Filter
   const [riwayatFilter, setRiwayatFilter] = useState<'ALL' | 'APPROVED' | 'PENDING' | 'REJECTED'>('ALL');
+  const [tugasFilter, setTugasFilter] = useState<'ALL' | 'PENDING' | 'REJECTED' | 'APPROVED'>('ALL');
 
   // Camera Live Stream Refs & State & Aspect Ratio (Default: Potret 3:4)
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1057,13 +1058,13 @@ export default function SantriPage() {
               }).length;
 
               return (
-                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                  <div>
+                <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <h2 className="text-sm font-bold text-slate-800">Target Harian Santri</h2>
                     <p className="text-xs text-slate-500">Selesaikan seluruh target untuk reward maksimal</p>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200">
+                  <div className="shrink-0 text-right">
+                    <span className="inline-flex items-center text-xs font-bold text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200 whitespace-nowrap">
                       {approvedCountToday} / {kegiatanList.length} Selesai
                     </span>
                   </div>
@@ -1071,132 +1072,217 @@ export default function SantriPage() {
               );
             })()}
 
-            <div className="space-y-2.5">
-              {sortedKegiatanList.map((keg) => {
-                const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, keg.id);
-                const isApproved = dailyStatus.isApproved;
-                const isPending = dailyStatus.isPending;
-                const isRejected = dailyStatus.isRejected;
-                const lapRef = dailyStatus.laporan;
+            {/* Filter Status Tugas Hari Ini */}
+            {(() => {
+              const statusCounts = sortedKegiatanList.reduce(
+                (acc, k) => {
+                  const s = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, k.id);
+                  if (s.isApproved) acc.approved++;
+                  else if (s.isPending) acc.pending++;
+                  else if (s.isRejected) acc.rejected++;
+                  return acc;
+                },
+                { approved: 0, pending: 0, rejected: 0 }
+              );
 
-                return (
-                  <div
-                    key={keg.id}
-                    className={`bg-white rounded-2xl p-3.5 border transition shadow-sm ${
-                      isApproved
-                        ? 'border-emerald-300 bg-emerald-50/25 opacity-75'
-                        : isPending
-                        ? 'border-amber-300 bg-amber-50/25 opacity-80'
-                        : isRejected
-                        ? 'border-rose-300 bg-rose-50/30'
-                        : 'border-slate-200 hover:border-teal-300'
+              return (
+                <div className="flex items-center gap-1.5 bg-slate-200/70 p-1 rounded-xl text-xs font-medium overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setTugasFilter('ALL')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition whitespace-nowrap text-center ${
+                      tugasFilter === 'ALL' ? 'bg-white text-slate-900 font-bold shadow-sm' : 'text-slate-600'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                            isApproved
-                              ? 'bg-emerald-100 border-emerald-300'
-                              : isPending
-                              ? 'bg-amber-100 border-amber-300'
-                              : isRejected
-                              ? 'bg-rose-100 border-rose-300'
-                              : 'bg-slate-100 border-slate-200'
-                          }`}
-                        >
-                          {renderKegiatanIcon(keg.icon)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-slate-800">{keg.nama}</span>
-                            {keg.isWajib && (
-                              <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.2 rounded border border-rose-200">
-                                Wajib
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] font-medium">
-                            {keg.isTimeRestricted ? (
-                              (() => {
-                                const cd = calculateActivityCountdown(keg.jamMulai, keg.jamSelesai);
-                                return (
-                                  <span
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${
-                                      cd.status === 'SEDANG_DIBUKA'
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                        : cd.status === 'SEGERA_BERAKHIR'
-                                        ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
-                                        : cd.status === 'BERAKHIR'
-                                        ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                                    }`}
-                                  >
-                                    <Clock className="w-3 h-3 text-slate-500" />
-                                    <span>{keg.targetWaktu}</span>
-                                    {cd.status === 'SEGERA_BERAKHIR' && <span>🔥 Segera Berakhir!</span>}
-                                    {cd.status === 'SEDANG_DIBUKA' && <span>🟢 Dibuka Now</span>}
-                                  </span>
-                                );
-                              })()
-                            ) : (
-                              <span className="flex items-center gap-1 px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
-                                <Clock className="w-3 h-3 text-slate-500" />
-                                <span>♾️ Waktu Fleksibel</span>
-                              </span>
-                            )}
-                            <span className="text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
-                              +{keg.poin} Poin
-                            </span>
-                          </div>
+                    Semua ({kegiatanList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTugasFilter('PENDING')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition whitespace-nowrap text-center ${
+                      tugasFilter === 'PENDING' ? 'bg-white text-amber-700 font-bold shadow-sm' : 'text-slate-600'
+                    }`}
+                  >
+                    Menunggu ({statusCounts.pending})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTugasFilter('REJECTED')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition whitespace-nowrap text-center ${
+                      tugasFilter === 'REJECTED' ? 'bg-white text-rose-700 font-bold shadow-sm' : 'text-slate-600'
+                    }`}
+                  >
+                    Ditolak ({statusCounts.rejected})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTugasFilter('APPROVED')}
+                    className={`flex-1 py-1.5 px-2 rounded-lg transition whitespace-nowrap text-center ${
+                      tugasFilter === 'APPROVED' ? 'bg-white text-emerald-700 font-bold shadow-sm' : 'text-slate-600'
+                    }`}
+                  >
+                    Selesai ({statusCounts.approved})
+                  </button>
+                </div>
+              );
+            })()}
 
-                          {/* Catatan penolakan jika REJECTED */}
-                          {isRejected && lapRef?.catatanPengurus && (
-                            <div className="mt-1.5 p-1.5 bg-rose-100/70 border border-rose-200 text-rose-900 rounded-lg text-[10px]">
-                              <b>Catatan Musyrif:</b> {lapRef.catatanPengurus}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+            {(() => {
+              const displayList = sortedKegiatanList.filter((keg) => {
+                if (tugasFilter === 'ALL') return true;
+                const s = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, keg.id);
+                if (tugasFilter === 'APPROVED') return s.isApproved;
+                if (tugasFilter === 'PENDING') return s.isPending;
+                if (tugasFilter === 'REJECTED') return s.isRejected;
+                return true;
+              });
 
-                      {/* Tombol Aksi Sesuai Status */}
-                      <div className="shrink-0">
-                        {isApproved ? (
-                          <div className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>✓ Selesai</span>
-                          </div>
-                        ) : isPending ? (
-                          <div className="flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
-                            <Clock3 className="w-3.5 h-3.5 text-amber-700" />
-                            <span>⏳ Menunggu</span>
-                          </div>
-                        ) : isRejected ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenUpload(keg)}
-                            className="flex items-center gap-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
-                            title="Lapor ulang / perbaiki laporan"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Lapor Ulang</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenUpload(keg)}
-                            className="flex items-center gap-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            <span>Lapor</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
+              if (displayList.length === 0) {
+                return (
+                  <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400">
+                    <CheckSquare className="w-10 h-10 mx-auto mb-2 opacity-40 text-slate-400" />
+                    <p className="text-xs">
+                      {tugasFilter === 'PENDING'
+                        ? 'Tidak ada tugas yang sedang menunggu validasi.'
+                        : tugasFilter === 'REJECTED'
+                        ? 'Tidak ada tugas yang ditolak.'
+                        : tugasFilter === 'APPROVED'
+                        ? 'Belum ada tugas yang disetujui/selesai.'
+                        : 'Belum ada tugas tersedia.'}
+                    </p>
                   </div>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <div className="space-y-2.5">
+                  {displayList.map((keg) => {
+                    const dailyStatus = getSantriDailyActivityStatus(laporanList, user?.id, user?.nama, keg.id);
+                    const isApproved = dailyStatus.isApproved;
+                    const isPending = dailyStatus.isPending;
+                    const isRejected = dailyStatus.isRejected;
+                    const lapRef = dailyStatus.laporan;
+
+                    return (
+                      <div
+                        key={keg.id}
+                        className={`bg-white rounded-2xl p-3.5 border transition shadow-sm ${
+                          isApproved
+                            ? 'border-emerald-300 bg-emerald-50/25 opacity-75'
+                            : isPending
+                            ? 'border-amber-300 bg-amber-50/25 opacity-80'
+                            : isRejected
+                            ? 'border-rose-300 bg-rose-50/30'
+                            : 'border-slate-200 hover:border-teal-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                                isApproved
+                                  ? 'bg-emerald-100 border-emerald-300'
+                                  : isPending
+                                  ? 'bg-amber-100 border-amber-300'
+                                  : isRejected
+                                  ? 'bg-rose-100 border-rose-300'
+                                  : 'bg-slate-100 border-slate-200'
+                              }`}
+                            >
+                              {renderKegiatanIcon(keg.icon)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-bold text-slate-800">{keg.nama}</span>
+                                {keg.isWajib && (
+                                  <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.2 rounded border border-rose-200">
+                                    Wajib
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] font-medium">
+                                {keg.isTimeRestricted ? (
+                                  (() => {
+                                    const cd = calculateActivityCountdown(keg.jamMulai, keg.jamSelesai);
+                                    return (
+                                      <span
+                                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[9px] border ${
+                                          cd.status === 'SEDANG_DIBUKA'
+                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                            : cd.status === 'SEGERA_BERAKHIR'
+                                            ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
+                                            : cd.status === 'BERAKHIR'
+                                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                                        }`}
+                                      >
+                                        <Clock className="w-3 h-3 text-slate-500" />
+                                        <span>{keg.targetWaktu}</span>
+                                        {cd.status === 'SEGERA_BERAKHIR' && <span>🔥 Segera Berakhir!</span>}
+                                        {cd.status === 'SEDANG_DIBUKA' && <span>🟢 Dibuka Now</span>}
+                                      </span>
+                                    );
+                                  })()
+                                ) : (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.2 rounded font-semibold bg-slate-100 text-slate-600">
+                                    <Clock className="w-3 h-3 text-slate-500" />
+                                    <span>♾️ Waktu Fleksibel</span>
+                                  </span>
+                                )}
+                                <span className="text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                                  +{keg.poin} Poin
+                                </span>
+                              </div>
+
+                              {/* Catatan penolakan jika REJECTED */}
+                              {isRejected && lapRef?.catatanPengurus && (
+                                <div className="mt-1.5 p-1.5 bg-rose-100/70 border border-rose-200 text-rose-900 rounded-lg text-[10px]">
+                                  <b>Catatan Musyrif:</b> {lapRef.catatanPengurus}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Tombol Aksi Sesuai Status */}
+                          <div className="shrink-0">
+                            {isApproved ? (
+                              <div className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>✓ Selesai</span>
+                              </div>
+                            ) : isPending ? (
+                              <div className="flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                                <Clock3 className="w-3.5 h-3.5 text-amber-700" />
+                                <span>⏳ Menunggu</span>
+                              </div>
+                            ) : isRejected ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenUpload(keg)}
+                                className="flex items-center gap-1 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
+                                title="Lapor ulang / perbaiki laporan"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>Lapor Ulang</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenUpload(keg)}
+                                className="flex items-center gap-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 px-3 py-1.5 rounded-xl shadow-sm active:scale-95 transition"
+                              >
+                                <Camera className="w-3.5 h-3.5" />
+                                <span>Lapor</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 

@@ -1010,7 +1010,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       status: 'PENDING',
       statusWaktu: checkResult.statusWaktu,
       waktuLaporWIB: waktuStr,
-      createdAt: `Hari ini, ${waktuStr}`,
+      createdAt: new Date().toISOString(),
       likesCount: 0,
       isLikedByUser: false,
       comments: [],
